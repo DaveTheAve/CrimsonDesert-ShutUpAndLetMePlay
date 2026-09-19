@@ -1,0 +1,16 @@
+name: Feature request
+description: Describe a problem or improvement without changing the mod's narrow native-UI scope.
+title: '[Feature] '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Explain the user-visible problem and the result you would like.
+    validations:
+      required: true
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Scope and tradeoffs
+      description: Note compatibility concerns and how native hold-to-skip and UI behavior would be preserved.

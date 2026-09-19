@@ -1,0 +1,90 @@
+name: Prepare draft release
+
+'on':
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build (for example v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sulmp-draft-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build release assets (read-only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Validate tag syntax
+        env:
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected vMAJOR.MINOR.PATCH'; exit 1; }
+      - name: Check out the existing tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - name: Install LLVM cross-build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang-18 lld-18
+          mkdir -p "$RUNNER_TEMP/sulmp-llvm"
+          ln -s "$(command -v clang-cl-18)" "$RUNNER_TEMP/sulmp-llvm/clang-cl"
+          ln -s "$(command -v lld-link-18)" "$RUNNER_TEMP/sulmp-llvm/lld-link"
+          echo "$RUNNER_TEMP/sulmp-llvm" >> "$GITHUB_PATH"
+      - name: Build and validate without game files
+        shell: bash
+        run: bash tools/ci.sh
+      - name: Prepare allowlisted release assets
+        env:
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: python3 tools/prepare_release.py "$TAG"
+      - name: Hand off assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: dist/release-assets/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  draft:
+    name: Create draft (no source execution)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      # Deliberately no checkout and no execution of repository/PR code here.
+      - name: Download this run's assets and create a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          gh run download "$GITHUB_RUN_ID" --repo "$GH_REPO" --name release-assets --dir incoming
+          cd incoming
+          sha256sum --check CHECKSUMS.md
+          if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo 'A release already exists for this tag; it will not be overwritten.'
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          gh release create "$TAG" --repo "$GH_REPO" --verify-tag --draft             --title "Shut Up & Let Me Play: An Actual Skip Button $TAG" --notes-file RELEASE_NOTES.md             "ShutUpAndLetMePlay-$VERSION.zip"             "ShutUpAndLetMePlay-$VERSION-Source.zip"             BUILD_INFO.json CHECKSUMS.md

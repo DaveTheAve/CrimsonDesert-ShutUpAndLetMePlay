@@ -1,0 +1,10 @@
+#pragma once
+#include "VerifiedSignatures.part1.inc"
+#include "VerifiedSignatures.part2.inc"
+#include "VerifiedSignatures.part3.inc"
+#include "VerifiedSignatures.part4a.inc"
+#include "VerifiedSignatures.part4b.inc"
+#include "VerifiedSignatures.part5a.inc"
+#include "VerifiedSignatures.part5b.inc"
+#include "VerifiedSignatures.part6a.inc"
+#include "VerifiedSignatures.part6b.inc"

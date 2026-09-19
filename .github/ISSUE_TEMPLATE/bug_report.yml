@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible installation, native prompt or hold-to-skip issue.
+title: '[Bug] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check existing issues first. Do not upload the game executable, private saves,
+        account data or tokens. A successful CI build is not a full-game test.
+  - type: input
+    id: mod_version
+    attributes:
+      label: Mod version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Game and environment
+      description: Executable file version, displayed patch version, store, OS, ASI loader/version, input device and relevant other mods.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and result
+      description: Scene/quest (mark spoilers), steps, expected result, actual result and whether removing only this ASI changes the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Current diagnostics
+      description: Attach ShutUpAndLetMePlay.log and ShutUpAndLetMePlay_UpdateReport.json from the same session. Mention differing session/revision values.

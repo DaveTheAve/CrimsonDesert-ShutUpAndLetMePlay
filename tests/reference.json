@@ -1,0 +1,39 @@
+{
+  "executable_sha256": "6d348be9d52f81bd35cf7c55e73a5dbfc96cc8268438387c91f7f62c82381fa7",
+  "timestamp": "0x6aabb038",
+  "image_size": "0x17fcd000",
+  "functions": {
+    "Interaction": {
+      "rva": "0x1069280",
+      "length": 484,
+      "sha256": "5eece240ebc4f8dd3f56bcda73c856b42f589f1283f0ca7ecc1deee01503352f",
+      "ref_count": 21
+    },
+    "CinemaAppearance": {
+      "rva": "0x10689f0",
+      "length": 2178,
+      "sha256": "e2787a301a883fd9100f4e8ec1681b5807d0024325f9541697de04836d1cc731",
+      "ref_count": 121
+    },
+    "SetKeyguideAppearance": {
+      "rva": "0xcbe480",
+      "length": 267,
+      "sha256": "3a0601bde01123483657e43fdcad1749cf0c9ac4932bb92b60ecf263a9e5646c",
+      "ref_count": 13
+    }
+  },
+  "symbols": {
+    "Show": "0xcb6c50",
+    "Hide": "0xcb6e00",
+    "GameManager": "0x6d69208",
+    "DisappearStyle": "0x6ccef38",
+    "AppearStyle": "0x6ccef3c",
+    "RemoveStyle": "0x35ca0e0",
+    "AddStyle": "0x35ca040",
+    "InvalidateStyle": "0x35c6640",
+    "SortStyles": "0x35cae60",
+    "ResetKeyguide": "0xcbbb70",
+    "ClearEvent": "0xcc3d80",
+    "AppearanceDuration": "0x5d731d8"
+  }
+}

@@ -1,0 +1,31 @@
+# Build output and local tooling
+.build/
+.ci-bin/
+dist/
+__pycache__/
+.pytest_cache/
+.venv/
+*.asi
+*.exe
+*.dll
+*.obj
+*.lib
+*.pdb
+*.map
+*.res
+*.zip
+*.7z
+*.dmp
+*.tmp
+
+# Keep game files and diagnostics out of source control.
+private/
+game-files/
+*.log
+ShutUpAndLetMePlay_UpdateReport*.json
+
+# Local/editor files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

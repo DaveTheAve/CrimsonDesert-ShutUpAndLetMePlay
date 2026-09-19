@@ -1,0 +1,20 @@
+# Changelog
+
+## 1.0.0 — 2026-09-19
+
+### Shut Up & Let Me Play: An Actual Skip Button
+
+First public release.
+
+- Restores Crimson Desert's **actual native Skip control** during supported normal gameplay cutscenes.
+- Preserves the game's own hold timing, progress, binding selection, controller glyphs, localization, and UI behavior.
+- Uses the native cinematic UI instead of a custom overlay.
+- Adds process-name filtering and a per-process duplicate-load guard.
+- Produces paired diagnostic snapshots with session, process, and revision identifiers.
+- Removes live object addresses and full installation paths from public reports.
+- Handles short/failed writes, cleans failed temporary files, and retries diagnostics.
+- Limits routine diagnostic updates to on-change five-second worker intervals.
+- Adds Windows version metadata, reproducible builds, and separate player/source packages.
+- Includes public GitHub documentation, repository guards, issue/PR templates, game-file-free build checks, and a manually triggered draft-release workflow.
+
+No automatic skipping, custom overlay, rebinding, hold-duration change, telemetry, updater, subscription tier, or **Skip Button Premium+**.
