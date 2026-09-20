@@ -1,28 +1,20 @@
 # Contributing
 
-Keep this mod narrowly focused on the native normal-gameplay cutscene Skip
-control. Preserve the working native action, hold duration, binding/glyph
-selection and UI behavior unless an intentional change is discussed first.
+Keep this mod focused on native, manually requested skipping of supported gameplay cutscenes and NPC dialogue. Preserve native hold timing, binding/glyph selection, localization, and UI behavior.
 
-Use a focused issue/PR to explain the observable problem, relevant code path,
-smallest fix and regression coverage. Avoid unrelated refactors of the known-
-good hook path. Do not replace the native UI with an overlay or use generic
-Show calls on unverified child-selector handles.
+Use focused changes with an observable problem, the relevant native route, and regression coverage. Keep the routes distinct: normal cutscenes, interaction-dialogue progression, and native sequencer Skip are not interchangeable.
 
-Run `bash tools/ci.sh` for game-file-free checks. Changes to native behavior,
-resolver patterns, ABI declarations or hook installation also need the local
-reference tests described in `docs/BUILDING.md`, plus a clearly identified
-in-game check where possible. Report what was and was not executed.
+Interaction-dialogue changes must respect the native response-choice flag and per-entry event ordering. Never select responses, set quest flags, or retain a temporary dialogue context pointer across updates. Sequencer dialogue stays in its native input/sequence route rather than borrowing the interaction-advance loop.
 
-Never commit the game executable, extracted game assets, full disassembly
-listings, private logs, saves, credentials, third-party loader DLLs or compiled
-build output. Keep local test inputs outside the repository. Before pushing:
+Run `bash tools/ci.sh` for game-file-free checks. Native behavior, resolver patterns, ABI declarations, and hook-installation changes also need the local reference tests in `docs/BUILDING.md`, plus an identified in-game check where possible. Distinguish what was built, what ran under mocks, and what was observed in game.
+
+Do not commit game executables, extracted game assets, disassembly dumps, private diagnostic captures, saves, credentials, loader DLLs, or compiled output. Keep local test inputs outside the repository. The approved promotional PNGs under `assets/` are part of the repository.
+
+Before pushing:
 
 ```bash
 git status --short
 python3 tools/check_repository.py --tracked
 ```
 
-The check requires staged/tracked files. Ignore rules are not an enforcement
-boundary: they can be overridden and cannot remove an already-pushed secret.
-Review the actual staged files.
+Review the actual staged files. Ignore rules cannot remove an already-pushed secret.

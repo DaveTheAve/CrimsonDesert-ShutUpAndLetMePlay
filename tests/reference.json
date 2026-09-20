@@ -35,5 +35,44 @@
     "ResetKeyguide": "0xcbbb70",
     "ClearEvent": "0xcc3d80",
     "AppearanceDuration": "0x5d731d8"
+  },
+  "file_version": "1.0.0.2944",
+  "dialogue_functions": {
+    "Input": {
+      "size": 2964,
+      "sha256": "2fec1005379f6ea88f590fb1682a2dfc21f04a000ea97a2905c07ab12c303051",
+      "mask_sha256": "bed9ea1f77cdad9d791d8723277ee55487485334749409832edf227d7de22f29",
+      "references": 76
+    },
+    "Update": {
+      "size": 2130,
+      "sha256": "3202a5b0f0173ac2cb0bebb80800497c120fddb9cc2e2e8b2ecb9942560ff718",
+      "mask_sha256": "6bef3ee49cd615af59eb3879a60e1271f9bce106e53609eee101456c69006ee1",
+      "references": 74
+    },
+    "Advance": {
+      "size": 4749,
+      "sha256": "3527b382e83d0375bdd0d305ee84c4501f64e10f01c98f93add50e7a0a6769c8",
+      "mask_sha256": "08578c7350ce197fea43e944f50931d7622541c90b2d0e2cc00aa87fd248813f",
+      "references": 130
+    },
+    "Current": {
+      "size": 285,
+      "sha256": "9a0c9b77998e8e4a549a1964b1112369c768b7cd14a7aa82e8178436c493716e",
+      "mask_sha256": "57801e51e043391f751b801235678b1451c235c7eee829ffca26664c4f490641",
+      "references": 1
+    },
+    "Finish": {
+      "size": 834,
+      "sha256": "4a1af8c23e957df371ee66d68721233949dba33ae531bc15771209d7843e65ba",
+      "mask_sha256": "7e238d94193ba4afe0727257c4be0cdb3560ff025d169cb35418191d0e437bb9",
+      "references": 23
+    },
+    "Database": {
+      "size": 294,
+      "sha256": "c5c4a69670d4fe225aa544370e8eb69f3a3b43fab78b5e67675c472024a3fb69",
+      "mask_sha256": "016f6f3fadd097d06ddf0ba221cdbd4e5d5c3a5edd26275ed02bb2422a235c18",
+      "references": 9
+    }
   }
 }

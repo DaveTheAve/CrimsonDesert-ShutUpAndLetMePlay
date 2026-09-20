@@ -14,17 +14,19 @@ MEDIA_FILES = {
 EXTENSIONS = {".cpp", ".h", ".inc", ".def", ".py", ".sh", ".cmd", ".md", ".json", ".yml", ".yaml"}
 SKIP_DIRS = {".git", ".build", ".ci-bin", "dist", "__pycache__", ".pytest_cache", ".venv", "private", "game-files"}
 
+
 def allowed(name: str) -> bool:
     p = PurePosixPath(name)
     if name.startswith('/') or '\\' in name or '..' in p.parts: return False
     if any(ord(c) < 32 or c in '<>:"|?*' for c in name): return False
-    if name in ROOT_FILES or name in MEDIA_FILES: return True
+    if name in ROOT_FILES or name in MEDIA_FILES or name == "release/NEXUS_DESCRIPTION.txt": return True
     if not p.parts or p.parts[0] not in DIRECTORIES: return False
     if p.suffix.lower() not in EXTENSIONS: return False
     lower = p.name.lower()
     if any(word in lower for word in ("updatereport", "bindingprobe", "childselectorprobe", "interactiontrace", "runtimeprobe")):
         return False
     return all(part not in SKIP_DIRS for part in p.parts)
+
 
 def inventory(root: Path, tracked_only: bool = False) -> dict[str, bytes]:
     if tracked_only:
@@ -37,7 +39,8 @@ def inventory(root: Path, tracked_only: bool = False) -> dict[str, bytes]:
             relative = p.relative_to(root)
             if any(part in SKIP_DIRS for part in relative.parts): continue
             if p.is_dir(): continue
-            if relative.as_posix() == 'ShutUpAndLetMePlay.asi': continue
+            # Build output is permitted on disk, never in source archives.
+            if relative.as_posix() in ('ShutUpAndLetMePlay.asi', 'CHECKSUMS.md'): continue
             names.append(relative.as_posix())
     result = {}
     for name in sorted(names):
@@ -46,11 +49,10 @@ def inventory(root: Path, tracked_only: bool = False) -> dict[str, bytes]:
         if p.is_symlink(): raise ValueError(f"Symlink not permitted: {name}")
         if not p.is_file(): raise ValueError(f"Missing repository file: {name}")
         limit = 4 * 1024 * 1024 if name in MEDIA_FILES else 1024 * 1024
-        if p.stat().st_size > limit: raise ValueError(f"Unexpectedly large repository file: {name}")
+        if p.stat().st_size > limit: raise ValueError(f"Unexpectedly large source file: {name}")
         data = p.read_bytes()
         if name in MEDIA_FILES:
-            if not data.startswith(b'\x89PNG\r\n\x1a\n'): raise ValueError(f"Approved media is not a PNG: {name}")
-        elif data.startswith((b'MZ', b'\x7fELF', b'PK\x03\x04')):
-            raise ValueError(f"Binary/archive disguised as source: {name}")
+            if not data.startswith(b'\x89PNG\r\n\x1a\n'): raise ValueError(f'Approved media is not PNG: {name}')
+        elif data.startswith((b'MZ', b'\x7fELF', b'PK\x03\x04')): raise ValueError(f"Binary/archive disguised as source: {name}")
         result[name] = data
     return result

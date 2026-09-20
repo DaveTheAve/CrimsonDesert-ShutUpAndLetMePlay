@@ -14,6 +14,7 @@ struct alignas(16) ThreadContext {
 static_assert(sizeof(DWORD)==4&&sizeof(ThreadEntry)==28&&sizeof(MemoryInfo)==48&&sizeof(ThreadContext)==1232,"Windows x64 ABI");
 static_assert(__builtin_offsetof(ThreadContext,rip)==248,"CONTEXT.Rip offset");
 extern "C" {
+__declspec(dllimport) unsigned long long __stdcall GetTickCount64();
 __declspec(dllimport) void __stdcall GetSystemTime(SystemTime*);
 __declspec(dllimport) HANDLE __stdcall CreateMutexW(void*,BOOL,const wchar_t*);
 __declspec(dllimport) BOOL __stdcall DeleteFileW(const wchar_t*);

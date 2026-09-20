@@ -1,11 +1,11 @@
 {
   "title": "Shut Up and Let Me Play - An Actual Skip Button",
-  "version": "1.0.0",
-  "summary": "Fast-forward is not skip. This restores Crimson Desert's native hold-to-skip control so supported gameplay cutscenes actually end when you hold Skip. No custom overlay, auto-skip, or remapping. Requires an x64 ASI loader.",
+  "version": "2.0.0",
+  "summary": "Fast-forward is not skip. Restores native hold-to-skip for supported Crimson Desert gameplay cutscenes and NPC dialogue. No custom overlay, auto-skip, or remapping. Requires a compatible x64 ASI loader.",
   "game": "Crimson Desert",
-  "main_file": "ShutUpAndLetMePlay-1.0.0.zip",
-  "optional_source": "ShutUpAndLetMePlay-1.0.0-Source.zip",
-  "github_repository_files": "CrimsonDesert-ShutUpAndLetMePlay-1.0.0-GitHub.zip",
+  "main_file": "ShutUpAndLetMePlay-2.0.0.zip",
+  "optional_source": "ShutUpAndLetMePlay-2.0.0-Source.zip",
+  "github_repository_files": "CrimsonDesert-ShutUpAndLetMePlay-2.0.0-GitHub.zip",
   "required_disclosure_tags": [
     "AI-Generated Content",
     "AI Media"
@@ -14,7 +14,6 @@
   "external_requirement": "Compatible x64 ASI loader (not bundled)",
   "author_and_license": "MIT License",
   "github_url": "https://github.com/DaveTheAve/CrimsonDesert-ShutUpAndLetMePlay",
-  "publication_state": "Public GitHub repository created; Nexus page prepared for publication.",
   "github_repository_name": "CrimsonDesert-ShutUpAndLetMePlay",
   "media_files": [
     "assets/Shut Up and Let Me Play - Header Image.png",

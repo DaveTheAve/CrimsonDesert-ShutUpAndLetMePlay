@@ -22,11 +22,21 @@ if [[ "${ACTUAL%% *}" != "$EXPECTED" ]]; then
 fi
 BUILD="$(mktemp -d)"
 trap 'rm -rf -- "$BUILD"' EXIT
-CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Werror -Wno-misleading-indentation)
+CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Werror -Wno-misleading-indentation -Wno-unused-function)
 g++ "${CXXFLAGS[@]}" "$ROOT/tests/native_harness.cpp" -o "$BUILD/native_harness"
 g++ "${CXXFLAGS[@]}" "$ROOT/tests/compiled_asi_harness.cpp" -o "$BUILD/compiled_asi_harness"
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/dialogue_harness.cpp" -o "$BUILD/dialogue_harness"
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/dialogue_compiled_harness.cpp" -o "$BUILD/dialogue_compiled_harness"
+g++ "${CXXFLAGS[@]}" "$ROOT/tests/sequencer_compiled_harness.cpp" -o "$BUILD/sequencer_compiled_harness"
 "$BUILD/native_harness" "$1"
+"$BUILD/dialogue_harness" "$1"
 for scenario in success busy allocation unwind protect suspend context flush helper duplicate duplicate_after case mutex pin image shape short write zero rename readonly; do
   "$BUILD/compiled_asi_harness" "$1" "$ROOT/ShutUpAndLetMePlay.asi" "$scenario" "$BUILD/reports"
+done
+for scenario in npc_success npc_budget npc_choice npc_events npc_stale npc_changed npc_waiting npc_late_change npc_shape npc_allocation npc_unwind npc_protect npc_flush; do
+  "$BUILD/dialogue_compiled_harness" "$1" "$ROOT/ShutUpAndLetMePlay.asi" "$scenario" "$BUILD/reports"
+done
+for scenario in seq_mode0 seq_mode2 seq_no_actor seq_hidden seq_inactive seq_bad_event seq_rejected_type seq_paused seq_mode4 seq_wrong_state seq_shape seq_callback seq_ambiguous; do
+  "$BUILD/sequencer_compiled_harness" "$1" "$ROOT/ShutUpAndLetMePlay.asi" "$scenario" "$BUILD/reports"
 done
 python3 "$ROOT/tests/validate_reports.py" "$BUILD/reports"

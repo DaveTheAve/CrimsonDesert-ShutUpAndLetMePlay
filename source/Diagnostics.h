@@ -8,6 +8,10 @@
 namespace crimson {
 struct DiagnosticSnapshot {
     Observation observation;
+    DialogueStats dialogue;
+    SequencerStats sequencer;
+    bool sequencerEnabled=false;
+    bool dialogueEnabled=false;
     bool available = false;
     U32 uiThread = 0;
     U32 offThreadCalls = 0;
@@ -112,7 +116,7 @@ struct Diagnostics {
         return true;
     }
     void write(const char* status, const char* reason, const Image& image,
-               const Resolved& resolved, const DiagnosticSnapshot& snap) {
+               const Resolved& resolved, const DiagnosticSnapshot& snap,const DialogueResolved& npc,const SequencerResolved& sequence) {
         ++revision;
         const U64 priorErrors = writeErrors;
         const DWORD priorError = lastWriteError;
@@ -150,6 +154,35 @@ struct Diagnostics {
         state("last_disappear_before", s.lastDisappearBefore);
         state("last_appear_after", s.lastAppearAfter);
         state("last_disappear_after", s.lastDisappearAfter, false);
+        add("  },\n  \"npc_dialogue\": {\n");
+        field("enabled",snap.dialogueEnabled);
+        field("signatures_valid",npc.ready);
+        add("    \"reason\": \"");add(npc.failure?npc.failure:"native dialogue routes verified");add("\",\n");
+        field("input_rva",npc.input);field("update_rva",npc.update);field("advance_rva",npc.advance);
+        const DialogueStats&d=snap.dialogue;
+        field("updates",d.updates);field("prompt_repairs",d.prompts);field("prompt_verified",d.promptVerified);
+        field("requests",d.requests);field("accepted",d.accepted);field("progression_steps",d.steps);
+        field("choice_stops",d.choices);field("completion_paths",d.completed);field("stale_requests",d.stale);
+        field("guard_blocks",d.guards);field("budget_yields",d.yields);field("stalls",d.stalls);
+        field("nested_or_concurrent_passthrough",d.offThread);field("last_state",d.reason);
+        field("candidate_updates",d.candidates);field("ready_offers",d.offers);
+        field("last_dialogue_kind",d.lastKind);field("last_control_mode",d.lastMode);field("last_waiting_choice",d.lastChoice,false);
+        add("  },\n  \"sequencer_dialogue\": {\n");
+        const SequencerStats&q=snap.sequencer;
+        field("enabled",snap.sequencerEnabled);field("signatures_valid",sequence.ready);
+        add("    \"reason\": \"");add(sequence.failure?sequence.failure:"native sequencer Skip route verified");add("\",\n");
+        field("native_skip_rva",sequence.skip);field("native_completion_rva",sequence.finish);
+        field("mode_0_prompt_repairs",q.mode0Prompts);field("mode_2_prompt_repairs",q.mode2Prompts);
+        field("prompt_repairs",q.prompts);field("native_style_state_verified",q.verified);
+        field("hold_completions_forwarded",q.forwarded);field("mode_changes_after_native_input",q.modeExit);
+        field("guard_blocks",q.guards);field("preactivation_unlocks",q.preUnlocks);
+        field("input_shows",q.inputShows);field("disable_cleanup",q.cleanup);
+        state("last_control_mode",q.lastMode==255?-1:I32(q.lastMode));
+        state("last_request_mode",q.lastRequestMode==255?-1:I32(q.lastRequestMode));
+        add("    \"appearance_callbacks_by_mode_0_to_4_then_other\": [");
+        for(U32 i=0;i<6;++i){if(i)add(", ");number(q.appearanceModes[i]);}
+        add("],\n    \"input_callbacks_by_mode_0_to_4_then_other\": [");
+        for(U32 i=0;i<6;++i){if(i)add(", ");number(q.inputModes[i]);}add("]\n");
         add("  },\n  \"diagnostics\": {\n");
         field("previous_write_errors", priorErrors);
         field("last_write_error", priorError, false);
@@ -167,7 +200,20 @@ struct Diagnostics {
         add("\nSafety-gate blocks: "); number(s.blocks);
         add("\nPrevious diagnostic write errors: "); number(priorErrors);
         add("\nLast diagnostic write error: "); number(priorError);
-        add("\nNative action, hold timing and bindings are unchanged. No custom overlay.\n");
+        add("\nNPC dialogue feature: ");add(snap.dialogueEnabled?"enabled":"disabled");
+        add("\nNPC dialogue requests accepted: ");number(d.accepted);
+        add("\nNPC dialogue progression steps: ");number(d.steps);
+        add("\nNPC choice boundaries: ");number(d.choices);
+        add("\nNPC completion paths: ");number(d.completed);
+        add("\nNPC feature reason: ");add(npc.failure?npc.failure:"native dialogue routes verified");
+        add("\nSequencer dialogue feature: ");add(snap.sequencerEnabled?"enabled":"disabled");
+        add("\nSequencer mode 0 prompt repairs: ");number(q.mode0Prompts);
+        add("\nSequencer mode 2 prompt repairs: ");number(q.mode2Prompts);
+        add("\nSequencer hold completions forwarded: ");number(q.forwarded);
+        add("\nSequencer mode changes after native input: ");number(q.modeExit);
+        add("\nSequencer guard blocks: ");number(q.guards);
+        add("\nSequencer feature reason: ");add(sequence.failure?sequence.failure:"native sequencer Skip route verified");
+        add("\nCutscene action, native hold timing and bindings are unchanged. No custom overlay.\n");
         add("Style-state checks do not measure rendered pixels.\n");
         add("The JSON report has the full snapshot. Compare session and revision before combining files.\n");
         const bool logOK = writeFile(L"ShutUpAndLetMePlay.log");

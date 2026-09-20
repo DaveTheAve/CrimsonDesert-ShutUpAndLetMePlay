@@ -1,14 +1,16 @@
-// ShutUpAndLetMePlay public release.
-// Two verified UI entry hooks: working native input activation + recurring
-// native appearance correction. Native Skip action/hold timing remain untouched.
+// ShutUpAndLetMePlay: native cutscene and interaction-dialogue Skip.
+// The optional dialogue pair fails independently; existing cutscene support stays active.
 #include "Win32Minimal.h"
 #include "Behavior.h"
+#include "Sequencer.h"
 #include "Diagnostics.h"
 using namespace crimson;
+extern "C" { int _fltused = 0; }
 extern "C" void* memcpy(void*d,const void*s,SIZE_T n){volatile U8*x=(volatile U8*)d;const volatile U8*y=(const volatile U8*)s;for(SIZE_T i=0;i<n;++i)x[i]=y[i];return d;}
 extern "C" void* memset(void*d,int v,SIZE_T n){volatile U8*x=(volatile U8*)d;for(SIZE_T i=0;i<n;++i)x[i]=(U8)v;return d;}
 static HANDLE const InvalidHandle=(HANDLE)(I64)-1;
-static HMODULE module;static Behavior engine;
+static HMODULE module;static Behavior engine;static Dialogue dialogue;static Sequencer sequencer;
+static U64 monotonicMilliseconds(){return GetTickCount64();}
 static U32 ownerThread=0,offThreadCalls=0,observationLock=0,changed=0,stop=0;
 static Observation published;
 static Diagnostics diagnostics;
@@ -34,11 +36,20 @@ static bool onOwnerThread(){
 }
 static void __fastcall InteractionEntry(void*self,U8 enabled){
     if(!onOwnerThread()){engine.originalInteraction(self,enabled);return;}
-    engine.interaction(self,enabled);publish();
+    sequencer.beforeInteraction(self,enabled);dialogue.beforeInteraction(self,enabled);
+    engine.interaction(self,enabled);dialogue.afterInteraction(self,enabled);sequencer.afterInteraction(self,enabled);publish();
 }
 static void __fastcall AppearanceEntry(void*self,U8 enabled){
     if(!onOwnerThread()){engine.originalAppearance(self,enabled);return;}
-    engine.appearance(self,enabled);publish();
+    engine.appearance(self,enabled);dialogue.afterAppearance(self,enabled);sequencer.afterAppearance(self,enabled);publish();
+}
+static void __fastcall DialogueInputEntry(void*self,void*event,void*guide,U8 phase){
+    if(sequencer.input(self,event,guide,phase))return;
+    if(dialogue.input(self,event,guide,phase))return;
+    dialogue.originalInput(self,event,guide,phase);
+}
+static U32* __fastcall DialogueUpdateEntry(void*self,U32*result,void*actor,void*player,float dt,U64 gameTime){
+    return dialogue.update(self,result,actor,player,dt,gameTime);
 }
 static void absoluteJump(U8*where,void*target){
     const U8 j[]={0xFF,0x25,0,0,0,0};copy(where,j,6);copy(where+6,&target,8);
@@ -48,7 +59,8 @@ struct Hook {
     U8 original[15]{},replacement[15]{};DWORD oldProtect=0;
     bool protectedPage=false,registered=false;
 };
-static Hook hooks[2];
+static Hook cutsceneHooks[2],dialogueHooks[2];
+static Hook* hooks=cutsceneHooks;
 struct Thread {HANDLE handle=nullptr;bool suspended=false;};
 static Thread threads[1024];static U32 threadCount=0;
 static void releaseThreads(){
@@ -83,7 +95,7 @@ static bool freezeThreads(bool&busy){
         t.suspended=true;
         ThreadContext context{};context.flags=0x100001;
         if(!GetThreadContext(t.handle,&context)){installFailure="thread context read failed";return false;}
-        for(auto&h:hooks)if(context.rip>=(U64)h.target&&context.rip<(U64)h.target+15){busy=true;return false;}
+        for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)if(context.rip>=(U64)h.target&&context.rip<(U64)h.target+15){busy=true;return false;}
     }return true;
 }
 static void restoreProtections(){
@@ -93,37 +105,48 @@ static void restoreProtections(){
 }
 static void discardHooks(){
     restoreProtections();
-    for(auto&h:hooks){if(h.registered){RtlDeleteFunctionTable(h.table);h.registered=false;}if(h.allocation)VirtualFree(h.allocation,0,0x8000);h=Hook{};}
+    for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true){if(h.registered){RtlDeleteFunctionTable(h.table);h.registered=false;}if(h.allocation)VirtualFree(h.allocation,0,0x8000);h=Hook{};}
 }
-static bool prepareHook(Hook&h,U32 r,void*entry){
-    h.target=engine.image.base+r;copy(h.original,h.target,15);
+static bool prepareHook(Hook&h,U32 r,void*entry,const U8*unwind,const U8*expected){
+    h.target=engine.image.base+r;
+    if(!readable(h.target,15)||!same(h.target,expected,15)){
+        installFailure="native entry changed between validation and installation";return false;
+    }
+    copy(h.original,h.target,15);
     h.allocation=(U8*)VirtualAlloc(nullptr,4096,0x3000,4);if(!h.allocation){installFailure="trampoline allocation failed";return false;}
     copy(h.allocation,h.original,15);absoluteJump(h.allocation+15,h.target+15);
-    copy(h.allocation+32,engine.resolved.unwind,16);h.table=(RuntimeFunction*)(h.allocation+64);*h.table={0,29,32};
+    copy(h.allocation+32,unwind,16);h.table=(RuntimeFunction*)(h.allocation+64);*h.table={0,29,32};
     // Proper x64 unwind info for the exact copied prologue; no stolen relative instructions.
     if(!RtlAddFunctionTable(h.table,1,(U64)h.allocation)){installFailure="trampoline unwind registration failed";return false;}h.registered=true;
     DWORD old=0;if(!VirtualProtect(h.allocation,4096,0x20,&old)||!FlushInstructionCache(GetCurrentProcess(),h.allocation,29)){
         installFailure="trampoline protection or instruction-cache flush failed";return false;}
     absoluteJump(h.replacement,entry);h.replacement[14]=0x90;return true;
 }
-static bool installHooks(){
-    if(!prepareHook(hooks[0],engine.resolved.interaction,(void*)&InteractionEntry)||!prepareHook(hooks[1],engine.resolved.appearance,(void*)&AppearanceEntry)){discardHooks();return false;}
-    // Publish both callable originals before either live entry can reach a hook.
-    engine.originalInteraction=(Toggle)hooks[0].allocation;engine.originalAppearance=(Toggle)hooks[1].allocation;
+static bool installHooks(bool npc=false){
+    hooks=npc?dialogueHooks:cutsceneHooks;
+    bool prepared=npc?
+        (prepareHook(hooks[0],dialogue.resolved.input,(void*)&DialogueInputEntry,DialogueInputTrampolineUnwind,DialogueInputBytes)&&
+         prepareHook(hooks[1],dialogue.resolved.update,(void*)&DialogueUpdateEntry,DialogueUpdateTrampolineUnwind,DialogueUpdateBytes)):
+        (prepareHook(hooks[0],engine.resolved.interaction,(void*)&InteractionEntry,engine.resolved.unwind,InteractionBytes)&&
+         prepareHook(hooks[1],engine.resolved.appearance,(void*)&AppearanceEntry,engine.resolved.unwind,CinemaAppearanceBytes));
+    if(!prepared){discardHooks();return false;}
+    // Publish originals before either entry is modified, for both hook pairs.
+    if(npc){dialogue.originalInput=(DialogueInput)hooks[0].allocation;dialogue.originalUpdate=(DialogueUpdate)hooks[1].allocation;}
+    else{engine.originalInteraction=(Toggle)hooks[0].allocation;engine.originalAppearance=(Toggle)hooks[1].allocation;}
     bool installed=false;
     for(unsigned attempt=0;attempt<40&&!installed;++attempt){
         installFailure=nullptr;
         if(!enumerateThreads())break;
-        bool pages=true;for(auto&h:hooks){if(!VirtualProtect(h.target,15,0x40,&h.oldProtect)){pages=false;installFailure="cannot protect native entry";break;}h.protectedPage=true;}
+        bool pages=true;for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true){if(!VirtualProtect(h.target,15,0x40,&h.oldProtect)){pages=false;installFailure="cannot protect native entry";break;}h.protectedPage=true;}
         if(!pages){releaseThreads();restoreProtections();break;}
         bool busy=false;
         if(!freezeThreads(busy)){releaseThreads();restoreProtections();if(busy){Sleep(25);continue;}break;}
-        bool clean=true;for(auto&h:hooks)clean=clean&&same(h.target,h.original,15);
+        bool clean=true;for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)clean=clean&&same(h.target,h.original,15);
         if(clean){
-            for(auto&h:hooks)copy(h.target,h.replacement,15);
-            bool flush=true;for(auto&h:hooks)flush=FlushInstructionCache(GetCurrentProcess(),h.target,15)&&flush;
+            for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)copy(h.target,h.replacement,15);
+            bool flush=true;for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)flush=FlushInstructionCache(GetCurrentProcess(),h.target,15)&&flush;
             if(flush){installed=true;}
-            else{for(auto&h:hooks)copy(h.target,h.original,15);for(auto&h:hooks)FlushInstructionCache(GetCurrentProcess(),h.target,15);installFailure="entry cache flush failed; original entry bytes restored";}
+            else{for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)copy(h.target,h.original,15);for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)FlushInstructionCache(GetCurrentProcess(),h.target,15);installFailure="entry cache flush failed; original entry bytes restored";}
         }else installFailure="another modification changed a native entry before installation";
         // Instruction pointers inside either replaced prologue cause retry,
         // rather than relocating a live thread context or risking half a jump.
@@ -187,7 +210,10 @@ static void writeSnapshot(const char* status, const char* reason) {
     }
     snapshot.uiThread = __atomic_load_n(&ownerThread, __ATOMIC_ACQUIRE);
     snapshot.offThreadCalls = __atomic_load_n(&offThreadCalls, __ATOMIC_RELAXED);
-    diagnostics.write(status, reason, engine.image, engine.resolved, snapshot);
+    snapshot.dialogue=dialogue.snapshot();
+    snapshot.dialogueEnabled=dialogue.active();
+    snapshot.sequencer=sequencer.snapshot();snapshot.sequencerEnabled=sequencer.active();
+    diagnostics.write(status, reason, engine.image, engine.resolved, snapshot,dialogue.resolved,sequencer.resolved);
 }
 
 static DWORD __stdcall Worker(void*) {
@@ -218,15 +244,28 @@ static DWORD __stdcall Worker(void*) {
     engine.show = (WidgetCall)(b + engine.resolved.symbols[Sym_Show]);
     engine.hide = (WidgetCall)(b + engine.resolved.symbols[Sym_Hide]);
     engine.setAppearance = (Toggle)(b + engine.resolved.setAppearance);
+    dialogue.core=&engine;dialogue.clock=monotonicMilliseconds;sequencer.dialogue=&dialogue;
+    // Scan before changing any native entry; validation never scans our own detours.
+    const bool npcResolved=resolveDialogue(engine.image,engine.resolved,dialogue.resolved);
+    resolveSequencer(engine.image,dialogue.resolved,sequencer.resolved);
     if (!installHooks()) { writeSnapshot("disabled", installFailure); return 0; }
+    if(npcResolved){
+        dialogue.advance=(DialogueAdvance)(b+dialogue.resolved.advance);
+        dialogue.current=(DialogueCurrent)(b+dialogue.resolved.current);
+        dialogue.stopVoice=(DialogueStop)(b+dialogue.resolved.symbols[DialogueSymStopVoice]);
+        if(installHooks(true))__atomic_store_n(&dialogue.enabled,1,__ATOMIC_RELEASE);
+        else dialogue.resolved.failure=installFailure;
+    }
 
     const char* status = protectionWarning ? "active_warning" : "active";
     reason = protectionWarning ? "hooks active, but restoration of a native page protection failed"
-                               : "both native hooks installed; native Skip action unchanged";
+                               : "cutscene hooks active; NPC dialogue status reported separately";
     writeSnapshot(status, reason);
     while (!__atomic_load_n(&stop, __ATOMIC_RELAXED)) {
         Sleep(5000);
-        if (__atomic_exchange_n(&changed, 0, __ATOMIC_ACQ_REL) || diagnostics.retryPending)
+        if (__atomic_exchange_n(&changed, 0, __ATOMIC_ACQ_REL) ||
+            __atomic_exchange_n(&dialogue.dirty,0,__ATOMIC_ACQ_REL) ||
+            __atomic_exchange_n(&sequencer.dirty,0,__ATOMIC_ACQ_REL) || diagnostics.retryPending)
             writeSnapshot(status, reason);
     }
     return 0;

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0 — 2026-09-20
+
+- Adds manual native hold-to-skip for supported NPC dialogue as well as gameplay cutscenes.
+- Handles interaction conversations and sequencer-driven dialogue through their respective native routes, without increasing fast-forward speed.
+- Advances interaction dialogue through normal per-entry progression and event dispatch, stopping at the native response-choice boundary without choosing an answer.
+
 ## 1.0.0 — 2026-09-19
 
 ### Shut Up & Let Me Play: An Actual Skip Button

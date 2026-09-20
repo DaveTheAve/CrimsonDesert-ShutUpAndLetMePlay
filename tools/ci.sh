@@ -17,9 +17,13 @@ cp ShutUpAndLetMePlay.asi .build/reproducibility.asi
 bash build.sh
 cmp ShutUpAndLetMePlay.asi .build/reproducibility.asi
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Werror -Wno-misleading-indentation)
+# Compile the harnesses without executing game-dependent tests.
+CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Werror -Wno-misleading-indentation -Wno-unused-function)
 g++ "${CXXFLAGS[@]}" tests/native_harness.cpp -o .build/native_harness
 g++ "${CXXFLAGS[@]}" tests/compiled_asi_harness.cpp -o .build/compiled_asi_harness
+g++ "${CXXFLAGS[@]}" tests/dialogue_harness.cpp -o .build/dialogue_harness
+g++ "${CXXFLAGS[@]}" tests/dialogue_compiled_harness.cpp -o .build/dialogue_compiled_harness
+g++ "${CXXFLAGS[@]}" tests/sequencer_compiled_harness.cpp -o .build/sequencer_compiled_harness
 python3 tools/package_release.py
 python3 - <<'PY'
 import hashlib, json, pathlib, re, subprocess

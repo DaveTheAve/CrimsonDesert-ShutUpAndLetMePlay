@@ -1,19 +1,20 @@
 # Nexus publishing kit
 
-Suggested Nexus title: **Shut Up and Let Me Play - An Actual Skip Button**.  
-Suggested one-line pitch: **Fast-forward is not skip. This one actually leaves the cutscene.**
+Version: **2.0.0**
 
-Main file: `ShutUpAndLetMePlay-1.0.0.zip`.  
-Optional source file: `ShutUpAndLetMePlay-1.0.0-Source.zip`.
+Title: **Shut Up and Let Me Play - An Actual Skip Button**
 
-This kit is page/support copy, not an installable mod.
+Pitch: **Actual native skipping for supported gameplay cutscenes and NPC dialogue. Fast-forward remains a different verb.**
 
-Use `NEXUS_FIELDS.json` for listing fields, `NEXUS_DESCRIPTION.md` for the page description, `PINNED_POST.md` for support copy, and `CHANGELOG.md` for release notes. `NEXUS_DESCRIPTION.md` intentionally contains simple HTML: open Nexus **Code View** (`</>`), paste its raw contents there, then leave Code View to preview the rendered description. Do not paste Markdown syntax into Code View.
+Main file: `ShutUpAndLetMePlay-2.0.0.zip`  
+Optional developer download: `ShutUpAndLetMePlay-2.0.0-Source.zip`
 
-Public GitHub repository: **https://github.com/DaveTheAve/CrimsonDesert-ShutUpAndLetMePlay**. Use the same player ZIP for the corresponding GitHub and Nexus release.
+This kit is page/support copy and artwork, not an installable mod.
 
-Select the closest available Gameplay/User Interface category. Keep the separate x64 ASI-loader requirement and the compatibility limits. Apply all required tags listed in `NEXUS_FIELDS.json`.
+Use `NEXUS_FIELDS.json` for metadata, `NEXUS_DESCRIPTION.txt` for the approved **BBCode** description, `PINNED_POST.md` for support copy, and `CHANGELOG.md` for release notes. Paste the description's raw BBCode into the Nexus BBCode/source editor. Do not convert it to HTML or Markdown.
 
-Use the included **Shut Up and Let Me Play - Header Image.png** and **Shut Up and Let Me Play - Title Image.png** as the approved Nexus artwork. Their repository originals live under `assets/`; do not resize, recompress, optimize, or convert them. For gameplay gallery images, use genuine in-game screenshots of the working prompt.
+List a compatible x64 ASI loader separately. Players should use their loader's mod/plugin directory. Apply the required tags in `NEXUS_FIELDS.json`.
 
-The source repository contains the fuller checklist in `docs/PUBLISHING.md`.
+The kit includes **Shut Up and Let Me Play - Header Image.png** and **Shut Up and Let Me Play - Title Image.png** from the repository's `assets/` directory. The README uses the header. The full publishing checklist is in `docs/PUBLISHING.md` in the source repository.
+
+Repository: https://github.com/DaveTheAve/CrimsonDesert-ShutUpAndLetMePlay

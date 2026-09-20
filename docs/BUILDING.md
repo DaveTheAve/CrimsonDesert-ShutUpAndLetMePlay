@@ -1,73 +1,77 @@
-# Building and local tests
+# Building and testing
 
-## Toolchain
+## Build
 
-The delivered 1.0.0 ASI was built with LLVM clang-cl/lld-link 17. Build scripts
-require x64 clang-cl, lld-link and Python 3.10+ on PATH. No Windows SDK, game
-file, downloaded dependency during the build or separate C++ runtime is
-needed by this mod's scripts. These are developer, not player, requirements.
+Requirements: x64 LLVM `clang-cl` and `lld-link`, plus Python 3.10 or newer.
+The build uses its own minimal Windows declarations; no game executable or
+Windows SDK is needed to compile the ASI.
 
-On Windows, run `build.cmd`. On Linux x86-64:
+On Windows run `build.cmd`. On Linux x86-64 run:
 
 ```bash
 bash build.sh
 python3 tools/verify_binary.py ShutUpAndLetMePlay.asi
 ```
 
-The binary is written at repository root; intermediates go to `.build/`.
-The Windows batch script is provided but was not executed on Windows here.
-`source/Version.h` supplies the built version and Windows resource metadata.
-Compiler changes can change the hash; a public CI build is not asserted to
-match the supplied LLVM 17 binary byte-for-byte.
+The output is `ShutUpAndLetMePlay.asi`; intermediates stay in `.build/`.
+Local validation uses LLVM 17; GitHub-hosted build checks use LLVM 18. The Windows batch script
+was not executed on Windows in this validation environment.
 
 ## Game-file-free checks
 
-With g++ installed, `bash tools/ci.sh` performs source-inventory checks, builds,
-validates PE/metadata, compares two builds, runs Python tooling unit tests,
-compiles both native harnesses and validates generated archives. It requires
-no game file and performs no game execution. The local version has no account
-access; GitHub workflows separately retain artifacts/create requested drafts.
-
-GitHub-hosted jobs select Ubuntu 24.04 and LLVM 18. The workflow commands were
-checked locally where possible, but were not executed on hosted GitHub runners
-as part of this preparation. Public CI must never fetch or upload game files.
-
-## Optional native tests — local only
-
-On Linux x86-64 with g++, Python 3 and your own exact reference executable:
+With g++ installed:
 
 ```bash
-bash tests/run_tests.sh "/outside/the/repository/CrimsonDesert.exe"
+bash tools/ci.sh
 ```
 
-The script checks SHA-256 before executing isolated reviewed native routines
-and the compiled ASI against explicit mocks. It never invokes the game's
-entry point. It is not a Windows-kernel, loader, renderer or physical-input
-test. Do not use an unknown/untrusted executable as its test input.
+This checks the source inventory, builds twice, compares the ASIs, verifies PE
+metadata, runs Python/tooling tests, compiles five native harnesses and checks
+the generated archives. It does not execute the game or publish anything.
 
-Reference executable file/product version: **1.0.0.2944**.
-PE timestamp: **0x6AABB038**. Image size: **0x17FCD000**.
-SHA-256: `6d348be9d52f81bd35cf7c55e73a5dbfc96cc8268438387c91f7f62c82381fa7`.
-Full routine fingerprints are in `tests/reference.json`. This is an executable
-file version, not a guessed marketing patch number.
+## Local native execution tests
 
-Run the local harnesses against your own verified reference executable when you need native execution results. Public CI compiles those harnesses but does not distribute the game file or claim a full-game run. Always record the actual binary hash when testing.
+Use Linux x86-64, g++, Python and your own exact reference executable:
+
+```bash
+bash tests/run_tests.sh "/outside/the/source/CrimsonDesert.exe"
+```
+
+The script verifies the executable hash before executing isolated reviewed
+routines. It never calls the game's entry point. Reference file version:
+**1.0.0.2944**. Reference SHA-256:
+
+`6d348be9d52f81bd35cf7c55e73a5dbfc96cc8268438387c91f7f62c82381fa7`
+
+Do not supply an unknown/untrusted executable. Keep game binaries and captured
+logs outside the source tree. The executable is never included in generated archives.
+
+These tests use explicit fixtures and mocks, not Windows or the complete game.
+See `VALIDATION.md` for the exact boundaries, especially sequence completion,
+choice rendering, audio and gameplay-event recipients.
 
 ## Source layout
 
-`Behavior.h` owns native UI behavior; `Resolver.h` and `VerifiedSignatures.h`
-validate native routines. `ShutUpAndLetMePlay.cpp` owns startup, hook
-installation, UI callbacks and the worker. `Diagnostics.h` formats copied
-observations on the worker without chasing game-object pointers.
+`Behavior.h`, `Resolver.h` and `VerifiedSignatures.h` implement the normal
+cutscene path. `Dialogue.h`, `DialogueResolver.h` and `DialogueSignatures.h`
+implement interaction-dialogue offers, bounded progression and native choice
+boundaries. `Sequencer.h` and `SequencerSignatures.h` add the distinct native
+sequence Skip route and its validation.
 
-The runtime resolver checks complete masked shapes, cross-references, literal
-style names, expected action/widget identity and unwind layouts. It is not a
-fixed-address-only patch, but it is not guaranteed to survive future updates.
-Keep it fail-closed rather than broadening signatures until unknown builds patch.
+`ShutUpAndLetMePlay.cpp` owns startup, the two hook pairs and callbacks.
+`Diagnostics.h` formats copied observations; it does not follow game object
+pointers from the reporting worker. `Version.h` supplies the mod version.
 
-## Packages
+The sequence extension uses the existing cinematic/input hooks. It does not
+add a sequence-update hook, alter the dialogue-advance routine, or directly
+call an arbitrary completion method. The original native input handler owns
+actor lookup and the sequence Skip dispatch.
 
-Run `python3 tools/package_release.py` after building. `dist/` receives the
-player ZIP, optional source ZIP, a source-at-root GitHub ZIP, Nexus publishing
-kit and external checksums. Explicit inventories exclude build output and
-private inputs. Nothing is published by the packaging script.
+## Local packages
+
+```bash
+python3 tools/package_release.py
+```
+
+This creates player, source, repository, and Nexus-publishing archives with checksums in `dist/`. It has no upload or publication step. Only the ASI from the player
+ZIP goes into the game directory.

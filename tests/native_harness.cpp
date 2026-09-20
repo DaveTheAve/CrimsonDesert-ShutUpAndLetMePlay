@@ -49,6 +49,7 @@ struct Guide {
         set(object.data(),0,base+0x564B020);set(object.data(),8,backing.data());set(object.data(),0x1F8,action.data());
         set(wrapper.data(),0,base+0x5590310);set(wrapper.data(),8,wrapBacking.data());
         put32(action.data()+0x2C,hashes[role]);object[0x200]=family;object[0x201]=2;object[0x202]=5;
+        // Sentinels in hold state/cache, never interpreted by mocked lower layers.
         put32(object.data()+0x1D8,0x3F800000);object[0x1E8]=1;object[0x1E9]=1;object[0x1EA]=1;
         object[0x233]=0;object[0x240]=0;wrapper[0xBE]=1;
         allowedWidgets.push_back(object.data());allowedWidgets.push_back(wrapper.data());
@@ -81,6 +82,7 @@ int main(int argc,char**argv){try{
     Image image;CHECK(parseImage(base,image));Resolved resolved;CHECK(resolve(image,resolved));
     CHECK(resolved.interaction==0x1069280&&resolved.appearance==0x10689F0&&resolved.setAppearance==0xCBE480);
     std::cout<<"PASS resolver: unique complete function shapes, symbol cross-checks, literal style names, native Skip call, unwind records\n";
+    // Wrong native field offsets, wrong literal identity, and existing entry hooks must fail closed.
     U8 original=base[resolved.appearance+0x38];base[resolved.appearance+0x38]^=1;Resolved bad;CHECK(!resolve(image,bad));base[resolved.appearance+0x38]=original;
     original=base[resolved.interaction];base[resolved.interaction]=0xE9;CHECK(!resolve(image,bad));base[resolved.interaction]=original;
     original=base[0x5649EF8];base[0x5649EF8]='X';CHECK(!resolve(image,bad));base[0x5649EF8]=original;
@@ -90,11 +92,14 @@ int main(int argc,char**argv){try{
     behavior.setAppearance=(Toggle)(base+resolved.setAppearance);
     put32(base+resolved.symbols[Sym_AppearStyle],0x4321);put32(base+resolved.symbols[Sym_DisappearStyle],0x4320);
     memory.executable(resolved.interaction,InteractionSignature.size);memory.executable(resolved.appearance,CinemaAppearanceSignature.size);memory.executable(resolved.setAppearance,SetKeyguideAppearanceSignature.size);
+    // Execute the real style insertion/removal and reset routines too; our fixture
+    // preallocates sufficient vector capacity, so the game allocator is never called.
     memory.executable(resolved.symbols[Sym_ResetKeyguide],0x149);
     stub(memory,resolved.symbols[Sym_Show],(void*)mockShow);stub(memory,resolved.symbols[Sym_Hide],(void*)mockHide);
     memory.executable(resolved.symbols[Sym_AddStyle],0x99);memory.executable(resolved.symbols[Sym_RemoveStyle],0x70);
     stub(memory,resolved.symbols[Sym_InvalidateStyle],(void*)invalidate);stub(memory,resolved.symbols[Sym_SortStyles],(void*)noOperation);stub(memory,resolved.symbols[Sym_ClearEvent],(void*)noOperation);
     for(U32 r:{0xCB6990u,0xCC0190u,0xCC2A70u,0xCC2100u,0x3EF80B0u})stub(memory,r,(void*)noOperation);
+    // Construct exactly the 15-byte relocation-free prologue trampolines used by the ASI.
     Memory trampolines(4096);trampolines.executable(0,4096);
     std::memcpy(trampolines.b,base+resolved.interaction,15);jump(trampolines.b+15,base+resolved.interaction+15);
     std::memcpy(trampolines.b+128,base+resolved.appearance,15);jump(trampolines.b+143,base+resolved.appearance+15);
@@ -109,7 +114,7 @@ int main(int argc,char**argv){try{
         Fixture f(1,family);interaction(f.view.data(),1);CHECK(f.event[0xF2]==1);CHECK(f.guides[4].wrapper[0xBE]==0);
         auto hold=f.guides[4].object;
         appearance(f.view.data(),1);CHECK(f.appears(4)&&!f.disappears(4)&&!f.guides[4].wrapper[0xBE]);
-        CHECK(std::memcmp(hold.data()+0xD0,f.guides[4].object.data()+0xD0,0x178)==0);
+        CHECK(std::memcmp(hold.data()+0xD0,f.guides[4].object.data()+0xD0,0x178)==0); // includes binding/cache/hold/default state
         CHECK(f.guides[4].object[0x200]==family&&f.guides[4].object[0x201]==2);
         for(unsigned cycle=0;cycle<100;++cycle){
             appearance(f.view.data(),0);CHECK(!f.appears(4)&&f.disappears(4)&&f.guides[4].wrapper[0xBE]==1);
@@ -127,7 +132,8 @@ int main(int argc,char**argv){try{
     std::cout<<"PASS non-gameplay cinema modes and their disabled paths match unmodified native results\n";
     {Fixture f;interaction(f.view.data(),1);put32(f.guides[4].action.data()+0x2C,0x12345678);U32 repairs=behavior.stats.appearanceRepairs;
         appearance(f.view.data(),1);CHECK(behavior.stats.appearanceRepairs==repairs&&f.disappears(4));}
-    {Fixture f;interaction(f.view.data(),1);f.guides[3].wrapper[0xBE]=1;U32 repairs=behavior.stats.appearanceRepairs;appearance(f.view.data(),1);CHECK(behavior.stats.appearanceRepairs==repairs);}
+    {Fixture f;interaction(f.view.data(),1); // A separately hidden sibling row must not be forced visible.
+        f.guides[3].wrapper[0xBE]=1;U32 repairs=behavior.stats.appearanceRepairs;appearance(f.view.data(),1);CHECK(behavior.stats.appearanceRepairs==repairs);}
     CHECK(behavior.stats.appearanceVerified==behavior.stats.appearanceRepairs);
     CHECK(behavior.stats.blocks>=2&&activations>=3&&deactivations>=3);
     std::cout<<"PASS action identity / hidden-row guards and verified root-style observations\n";

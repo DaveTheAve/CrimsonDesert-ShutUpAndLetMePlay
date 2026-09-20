@@ -1,0 +1,46 @@
+[heading]An Actual Skip Button for Crimson Desert[/heading]
+[quote][b]Other “skip” mods:[/b] [i]What if the cutscene happened at ludicrous speed?[/i]
+[b]This mod:[/b] [i]What if the cutscene stopped happening?[/i][/quote]
+A tiny native mod for [b]Crimson Desert[/b] that restores the game's own [b]Skip[/b] control during normal gameplay cutscenes and dialogue.
+
+Hold the displayed Skip button and the cutscene or dialogue actually ends!
+
+Not faster. Not [i]aggressively progressing toward the end[/i]. Not “technically you watched the whole thing, but in the time it takes to sneeze.”
+[b]Skipped.[/b]
+
+We have finally achieved the technology promised by the word [i]skip[/i].
+
+[center][size=5][b]#VivaLaSkip[/b][/size][/center]
+
+[size=4][b]Installation instructions[/b][/size]
+[list=1]
+[*]Install a compatible Crimson Desert mod loader.[/*]
+[*]Place ShutUpAndLetMePlay.asi in the loader's mod or plugin directory.[/*]
+[*]Launch the game through your usual mod-loader setup.[/*]
+[/list]
+
+[b][size=4]The revolutionary feature list[/size][/b]
+[list]
+[*]An actual Skip button. We spared no expense.[/*]
+[*]Uses Crimson Desert's native cinematic UI rather than drawing a fake prompt on top.[/*]
+[*]Uses the game's own hold-to-skip behavior, progress, bindings, controller glyphs, localization, and UI scaling.[/*]
+[*]Leaves the game's normal cinematic hide/show behavior alone outside the targeted path.[/*]
+[*]Does not auto-skip every cutscene like an impatient housecat standing on your keyboard.[/*]
+[*]Does not remap your controls.[/*]
+[*]Does not add telemetry, an updater, an account, a newsletter, a battle pass, or a blockchain.[/*]
+[*]Does not “skip” by making the cutscene run at 8x/16x/whatever-the-camera-can-survive.[/*]
+[/list]
+
+[size=4][b]Requirements[/b][/size]
+[list]
+[*]Crimson Desert.[/*]
+[*]A compatible Crimson Desert mod loader.[/*]
+[*]Public binary: ShutUpAndLetMePlay.asi[/*]
+[*]The accompanying log file, ShutUpAndLetMePlay.log, can be used for troubleshooting when applicable.[/*]
+[/list]
+
+[b][size=4]Shout outs[/size][/b]
+Built for players who would rather play the game than watch the same cutscene at 16x speed. Thanks to the Crimson Desert modding community and everyone helping make native mod support more practical.
+
+[b][size=4]GitHub[/size][/b]
+[url=https://github.com/DaveTheAve/CrimsonDesert-ShutUpAndLetMePlay]https://github.com/DaveTheAve/CrimsonDesert-ShutUpAndLetMePlay[/url]

@@ -29,3 +29,6 @@ ShutUpAndLetMePlay_UpdateReport*.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Generated source-archive manifest
+/CHECKSUMS.md

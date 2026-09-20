@@ -8,6 +8,7 @@
 #include <string>
 #include <filesystem>
 #include "../source/Version.h"
+#include "../source/Dialogue.h"
 using W32=unsigned int;using W64=unsigned long long;
 struct WMemory {void*base;void*allocation;W32 allocationProtect;unsigned short partition,pad;W64 size;W32 state,protect,type,pad2;};
 struct WThread {W32 size,usage,id,owner,priority,delta,flags;};
@@ -33,10 +34,13 @@ static std::unique_ptr<Memory> loadPE(const char*path,bool reloc){
         for(U32 r=start;r<end;){U32 page=u32(m->b+r),len=u32(m->b+r+4);CHECK(len>=8&&r+len<=end);for(U32 i=8;i<len;i+=2){U16 e=u16(m->b+r+i);if(e>>12==10){U64 v;std::memcpy(&v,m->b+page+(e&4095),8);v+=delta;std::memcpy(m->b+page+(e&4095),&v,8);}else CHECK(e>>12==0);}r+=len;}}
     additional.push_back({m->b,m->n});return m;
 }
+static void(*workerSimulation)()=nullptr;
+static W64 simulatedTick=10000;
 static void NATIVE_ABI wSleep(W32 ms){
     CHECK(suspendedCount==0);
     CHECK(++sleepsCalled<10);
     if(ms==5000&&!gameRan){gameRan=true;currentThread=888;
+        if(workerSimulation){workerSimulation();currentThread=777;CHECK(dllMain(asiBase,0,nullptr)==1);return;}
         Fixture f;Toggle i=(Toggle)(base+behavior.resolved.interaction),a=(Toggle)(base+behavior.resolved.appearance);
         i(f.view.data(),1);CHECK(f.event[0xF2]==1);auto before=f.guides[4].object;
         a(f.view.data(),1);CHECK(f.appears(4)&&!f.disappears(4));CHECK(!f.guides[4].wrapper[0xBE]);
@@ -46,6 +50,7 @@ static void NATIVE_ABI wSleep(W32 ms){
         currentThread=777;CHECK(dllMain(asiBase,0,nullptr)==1);
     }
 }
+static W64 NATIVE_ABI wTick(){return simulatedTick;}
 static void* NATIVE_ABI wGetModuleHandle(const char16_t*){return base;}
 static int NATIVE_ABI wGetModuleHandleEx(W32 flags,const char16_t*,void**out){CHECK(suspendedCount==0&&flags==5);if(scenario=="pin")return 0;*out=asiBase;return 1;}
 static W32 NATIVE_ABI wGetModuleFileName(void*module,char16_t*p,W32 n){
@@ -63,18 +68,20 @@ static void* NATIVE_ABI wMutex(void*,int owner,const char16_t*name){
 static int NATIVE_ABI wDeleteFile(const char16_t*name){CHECK(!suspendedCount);return files.erase(narrow(name))?1:0;}
 
 static int NATIVE_ABI wDisableThreadCalls(void*){return 1;}
-static void* NATIVE_ABI wAlloc(void*,W64 size,W32 type,W32 protect){CHECK(!suspendedCount&&type==0x3000&&protect==4);++allocationsCalled;if(scenario=="allocation"&&allocationsCalled==2)return nullptr;
+static void* NATIVE_ABI wAlloc(void*,W64 size,W32 type,W32 protect){CHECK(!suspendedCount&&type==0x3000&&protect==4);++allocationsCalled;if((scenario=="allocation"&&allocationsCalled==2)||(scenario=="npc_allocation"&&allocationsCalled==4))return nullptr;
     void*p=mmap(nullptr,size,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);CHECK(p!=MAP_FAILED);virtualAllocations[p]=size;return p;}
 static int NATIVE_ABI wFree(void*p,W64 size,W32 type){CHECK(!suspendedCount&&size==0&&type==0x8000);auto it=virtualAllocations.find(p);CHECK(it!=virtualAllocations.end());munmap(p,it->second);virtualAllocations.erase(it);return 1;}
 static int NATIVE_ABI wProtect(void*p,W64 n,W32 value,W32*old){
     if(scenario=="protect"&&!injected&&p==base+behavior.resolved.appearance&&value==0x40){injected=true;return 0;}
+    if(scenario=="npc_protect"&&!injected&&value==0x40&&same(p,DialogueUpdateBytes,15)){injected=true;return 0;}
     *old=0x20;U64 a=(U64)p&~4095ull,end=((U64)p+n+4095)&~4095ull;int prot=PROT_READ;if(value==4||value==0x40)prot|=PROT_WRITE;if(value==0x20||value==0x40)prot|=PROT_EXEC;return mprotect((void*)a,end-a,prot)==0;}
 static W64 NATIVE_ABI wQuery(const void*p,WMemory*m,W64 n){CHECK(n==48);U64 a=(U64)p;Range hit{};
     for(auto&r:additional)if(a>=(U64)r.b&&a-(U64)r.b<r.size)hit=r;
     for(auto&r:regions)if(a>=(U64)r.first&&a-(U64)r.first<r.second)hit={(U8*)r.first,r.second};
     for(auto&r:virtualAllocations)if(a>=(U64)r.first&&a-(U64)r.first<r.second)hit={(U8*)r.first,r.second};
     if(!hit.b)return 0;*m={hit.b,hit.b,4,0,0,hit.size,0x1000,4,0x20000,0};return 48;}
-static int NATIVE_ABI wFlush(void*,const void*p,W64){++cacheCalls;if(scenario=="flush"&&!injected&&p==base+behavior.resolved.interaction){injected=true;return 0;}return 1;}
+static int NATIVE_ABI wFlush(void*,const void*p,W64){++cacheCalls;if(scenario=="flush"&&!injected&&p==base+behavior.resolved.interaction){injected=true;return 0;}
+    if(scenario=="npc_flush"&&!injected&&p==base+0x1063520){injected=true;return 0;}return 1;}
 static void* NATIVE_ABI wCurrentProcess(){return (void*)-1;}
 static W32 NATIVE_ABI wProcessId(){return 42;}
 static W32 NATIVE_ABI wThreadId(){return currentThread;}
@@ -89,7 +96,11 @@ static W32 NATIVE_ABI wResume(void*){CHECK(suspendedCount>0);--suspendedCount;re
 static int NATIVE_ABI wContext(void*h,U8*c){CHECK(suspendedCount>0&&u32(c+48)==0x100001);++contextCalled;if(scenario=="context"&&h==(void*)101)return 0;
     U64 rip=0xDEADBEEF;if(scenario=="busy"&&!injected){injected=true;rip=(U64)base+behavior.resolved.interaction+5;}std::memcpy(c+248,&rip,8);return 1;}
 static int NATIVE_ABI wExitCode(void*,W32*c){*c=259;return 1;}
-static U8 NATIVE_ABI wAddTable(U8*t,W32 n,U64 b){CHECK(!suspendedCount&&n==1&&u32(t)==0&&u32(t+4)==29&&u32(t+8)==32);CHECK(std::memcmp((void*)(b+32),behavior.resolved.unwind,16)==0);++unwindCalled;if(scenario=="unwind"&&unwindCalled==2)return 0;registeredTables[t]=true;return 1;}
+static U8 NATIVE_ABI wAddTable(U8*t,W32 n,U64 b){CHECK(!suspendedCount&&n==1&&u32(t)==0&&u32(t+4)==29&&u32(t+8)==32);const U8*expected=behavior.resolved.unwind;
+if(same((void*)b,DialogueInputBytes,15))expected=DialogueInputTrampolineUnwind;
+if(same((void*)b,DialogueUpdateBytes,15))expected=DialogueUpdateTrampolineUnwind;
+CHECK(std::memcmp((void*)(b+32),expected,16)==0);++unwindCalled;if(scenario=="npc_late_change"&&unwindCalled==2)base[0x1063520]=0x90;
+if((scenario=="unwind"&&unwindCalled==2)||(scenario=="npc_unwind"&&unwindCalled==4))return 0;registeredTables[t]=true;return 1;}
 static U8 NATIVE_ABI wDeleteTable(void*t){CHECK(!suspendedCount&&registeredTables.count(t));registeredTables.erase(t);return 1;}
 static void* NATIVE_ABI wCreateFile(const char16_t*p,W32 access,W32,void*,W32 disposition,W32,void*){CHECK(!suspendedCount&&access==0x40000000&&disposition==2);if(scenario=="readonly"){lastError=5;return (void*)-1;}void*h=(void*)(U64)(1000+fileCounter++);fileHandles[h]=narrow(p);files[fileHandles[h]].clear();return h;}
 static int NATIVE_ABI wWrite(void*h,const void*p,W32 n,W32*out,void*){
@@ -107,7 +118,7 @@ static int NATIVE_ABI wMove(const char16_t*from,const char16_t*to,W32 flags){
 static void linkImports(U8*p){
     std::map<std::string,void*> api={
 #define API(n,f) {n,(void*)f}
-      API("GetSystemTime",wSystemTime),API("CreateMutexW",wMutex),API("DeleteFileW",wDeleteFile),API("Sleep",wSleep),API("GetModuleHandleW",wGetModuleHandle),API("GetModuleHandleExW",wGetModuleHandleEx),API("GetModuleFileNameW",wGetModuleFileName),API("DisableThreadLibraryCalls",wDisableThreadCalls),
+      API("GetTickCount64",wTick),API("GetSystemTime",wSystemTime),API("CreateMutexW",wMutex),API("DeleteFileW",wDeleteFile),API("Sleep",wSleep),API("GetModuleHandleW",wGetModuleHandle),API("GetModuleHandleExW",wGetModuleHandleEx),API("GetModuleFileNameW",wGetModuleFileName),API("DisableThreadLibraryCalls",wDisableThreadCalls),
       API("VirtualAlloc",wAlloc),API("VirtualFree",wFree),API("VirtualProtect",wProtect),API("VirtualQuery",wQuery),API("FlushInstructionCache",wFlush),API("GetCurrentProcess",wCurrentProcess),API("GetCurrentProcessId",wProcessId),API("GetCurrentThreadId",wThreadId),API("GetLastError",wError),API("CreateThread",wCreateThread),API("CloseHandle",wClose),API("CreateToolhelp32Snapshot",wSnapshot),API("Thread32First",wNextThread),API("Thread32Next",wNextThread),API("OpenThread",wOpenThread),API("SuspendThread",wSuspend),API("ResumeThread",wResume),API("GetThreadContext",wContext),API("GetExitCodeThread",wExitCode),API("RtlAddFunctionTable",wAddTable),API("RtlDeleteFunctionTable",wDeleteTable),API("CreateFileW",wCreateFile),API("WriteFile",wWrite),API("MoveFileExW",wMove)
 #undef API
     };
@@ -115,8 +126,11 @@ static void linkImports(U8*p){
         for(U32 i=0;;++i){U64 name;std::memcpy(&name,p+lookup+i*8,8);if(!name)break;CHECK(name<0x80000000u);std::string s=(char*)p+name+2;CHECK(api.count(s));void*fn=api.at(s);std::memcpy(p+iat+i*8,&fn,8);}}
 }
 static void typedShowStub(Memory&m,U32 r,void*fn){
+    // Keep the exact 23-byte native prefix required by the ASI's resolver.
+    // Its push RSI / sub RSP,0x30 prologue is undone after the mock call.
     m.executable(r,64);U8 code[]={0x48,0xB8,0,0,0,0,0,0,0,0,0xFF,0xD0,0x48,0x83,0xC4,0x30,0x5E,0xC3};std::memcpy(code+2,&fn,8);std::memcpy(m.b+r+23,code,sizeof(code));
 }
+#ifndef DIALOGUE_TEST_LIBRARY
 int main(int argc,char**argv){try{
     CHECK(argc==4||argc==5);scenario=argv[3];auto game=loadPE(argv[1],false);base=game->b;
     CHECK(parseImage(base,behavior.image)&&resolve(behavior.image,behavior.resolved));
@@ -138,7 +152,7 @@ int main(int argc,char**argv){try{
         std::cout<<"PASS compiled ASI / "<<scenario<<" / assertions="<<checks<<" / no hooks or diagnostics written\n";return 0;
     }
     if(scenario=="readonly"){
-        CHECK(gameRan&&files.empty()&&virtualAllocations.size()==2&&registeredTables.size()==2);
+        CHECK(gameRan&&files.empty()&&virtualAllocations.size()==4&&registeredTables.size()==4);
         std::cout<<"PASS compiled ASI / readonly / assertions="<<checks<<" / diagnostics failure did not disable gameplay\n";return 0;
     }
     std::string report=files.at("C:\\TestGame\\ShutUpAndLetMePlay_UpdateReport.json");
@@ -160,7 +174,7 @@ int main(int argc,char**argv){try{
         if(scenario=="duplicate_after"){
             auto originalFiles=files;CHECK(worker(nullptr)==0);CHECK(files==originalFiles);CHECK(mutexCalls==2);
         }
-        CHECK(gameRan&&report.find("\"status\": \"active\"")!=std::string::npos);CHECK(virtualAllocations.size()==2&&registeredTables.size()==2);
+        CHECK(gameRan&&report.find("\"status\": \"active\"")!=std::string::npos);CHECK(virtualAllocations.size()==4&&registeredTables.size()==4);
         CHECK(report.find("\"native_style_state_verified\": 26")!=std::string::npos);CHECK(report.find("\"last_appear_after\": 1")!=std::string::npos);CHECK(report.find("\"last_disappear_after\": 0")!=std::string::npos);
         CHECK(report.find("\"safety_gate_blocks\": 0")!=std::string::npos);
     }else{
@@ -178,3 +192,5 @@ int main(int argc,char**argv){try{
     std::cout<<"Win32 services and lower-level rendering are mocked. Not a Windows or in-game execution.\n";
     return 0;
 }catch(const std::exception&e){std::cerr<<e.what()<<"\n";return 2;}}
+
+#endif

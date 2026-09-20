@@ -6,9 +6,9 @@
 > **Other “skip” mods:** *What if the cutscene happened at ludicrous speed?*  
 > **This mod:** *What if the cutscene stopped happening?*
 
-A tiny native mod for **Crimson Desert** that restores the game's own **Skip** control during normal gameplay cutscenes.
+A tiny native mod for **Crimson Desert** that restores the game's own **Skip** control during supported gameplay cutscenes and NPC dialogue.
 
-Hold the displayed Skip button and the cutscene actually ends.
+Hold the displayed Skip button and the cutscene or dialogue actually ends!
 
 Not faster. Not *aggressively progressing toward the end*. Not “technically you watched the whole thing, but in the time it takes to sneeze.”
 
@@ -21,6 +21,7 @@ We have finally achieved the technology promised by the word *skip*.
 ## The revolutionary feature list
 
 - **An actual Skip button.** We spared no expense.
+- **NPC dialogue too.** Supported conversations can now end before you start mentally composing your shopping list.
 - Uses **Crimson Desert's native cinematic UI** rather than drawing a fake prompt on top.
 - Uses the **game's own hold-to-skip behavior**, progress, bindings, controller glyphs, localization, and UI scaling.
 - Leaves the game's normal cinematic hide/show behavior alone outside the targeted path.
@@ -35,11 +36,11 @@ No disrespect to fast-forward mods. Fast-forward is useful. It is simply a diffe
 
 ## Installation
 
-Players should download the **latest release** from Releases. GitHub's automatically generated “Source code” archives are source code, which is famously bad at being an installed ASI.
+Players should download the **latest release** from [Releases](https://github.com/DaveTheAve/CrimsonDesert-ShutUpAndLetMePlay/releases/latest). GitHub's automatically generated “Source code” archives are source code, which is famously bad at being an installed ASI.
 
 1. **Completely close Crimson Desert.** Yes, actually close it. The game cannot politely replace code it is currently using.
 2. Keep your existing working **x64 ASI loader**. If you do not have one, install a compatible loader first. [Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader) is one option. The loader is **not bundled** with this mod.
-3. Copy **`ShutUpAndLetMePlay.asi`** beside **`CrimsonDesert.exe`**, normally in `bin64`.
+3. Place **`ShutUpAndLetMePlay.asi`** in the mod/plugin directory used by your compatible **x64 ASI loader**. Follow that loader's directory conventions; setups that load ASIs beside **`CrimsonDesert.exe`** normally use `bin64`.
 4. Launch the game normally.
 5. Enter a supported gameplay cutscene, hold the native Skip button, and enjoy the breathtaking cinematic experience of **not being in the cinematic anymore**.
 
@@ -60,15 +61,19 @@ Leave your ASI loader installed if other mods still use it.
 
 ## How it works, without pretending magic happened
 
-Crimson Desert already contains native Skip behavior and a native Skip UI control. The problem is that the normal cinematic appearance path suppresses that control while showing the neighboring cinematic controls.
+Crimson Desert already contains native Skip behavior and native Skip controls. This mod restores the relevant controls and uses the appropriate native route for the active cutscene or conversation.
 
-This mod hooks two verified native UI paths and restores the Skip control when the normal cinematic control row appears. The game still owns the actual skip action, hold duration, progress, binding selection, glyphs, localization, and rendering.
+**Normal cutscenes:** the game retains its native Skip action. The mod makes the existing control available when the normal cinematic row appears.
+
+**Interaction dialogue:** holding Skip stops the current voice and advances through the game's dialogue progression and per-entry event paths without playing the intervening speech. It stops when the game raises its response-choice flag. Choose your own response, then hold Skip again for the next section. When no entry remains, the normal dialogue update completes the conversation.
+
+**Sequencer-driven dialogue:** holding Skip goes through the game's native input handler and sequence Skip action. The game owns the transition and completion; this route does not run the interaction-dialogue loop or automatically choose a response. It does not add an extra stop-at-every-choice rule to the native sequence logic.
+
+The game still owns hold timing, bindings, glyphs, localization, UI scaling, and rendering. There is no custom overlay, fake progress ring, forced controller mode, binding rewrite, or executable-on-disk patch.
 
 In other words, the mod is not inventing a new Skip button. It is standing behind the game's existing Skip button and whispering:
 
 **“You can come out now.”**
-
-There is no custom overlay, fake progress ring, forced controller mode, binding rewrite, or executable-on-disk patch.
 
 ---
 
@@ -83,8 +88,6 @@ That means many game updates that simply move code around, change RVAs, or rearr
 If Pearl Abyss substantially rewrites the relevant native code, a signature becomes ambiguous, or another mod has already modified the same entry points, Shut Up & Let Me Play fails safely instead of hooking an unknown function and hoping for the best. At that point, the mod may need an update.
 
 The currently tested **`CrimsonDesert.exe` file version is `1.0.0.2944`**. That version number records what has been tested; it is **not** a hard-coded compatibility lock.
-
-The supported normal gameplay cinematic path is the target. Not every scene, input device, remap, language, UI scale, store build, or future patch has been personally interrogated.
 
 Do not hot-load or hot-unload the ASI.
 
@@ -131,10 +134,12 @@ If something breaks, use the repository's bug-report form and include both files
 - mod version
 - ASI loader
 - input device
-- the scene where it happened
+- the scene or NPC conversation where it happened, including any response choice
 - relevant other mods
 
-`active` means the native hooks installed successfully. It does **not** mean the diagnostic system grew eyes and personally watched your pixels.
+The JSON separates normal cutscene activity (`runtime`), interaction dialogue (`npc_dialogue`), and sequencer-driven dialogue (`sequencer_dialogue`). Check each dialogue section's `enabled` flag and reason separately. Choice stops, progression, and per-mode activity help identify which route was used.
+
+`active` means the core cutscene hooks installed successfully. It does **not** mean the diagnostic system grew eyes and personally watched your pixels.
 
 `disabled` includes a reason. If the report says `active_warning`, exit the game and remove the ASI before trying again.
 
@@ -161,7 +166,7 @@ GitHub Actions builds without game files, runs release-tool tests, compiles the 
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing the native hooks and [SECURITY.md](SECURITY.md) before reporting a sensitive issue.
 
-The intended GitHub repository name is:
+The GitHub repository is:
 
 **`CrimsonDesert-ShutUpAndLetMePlay`**
 

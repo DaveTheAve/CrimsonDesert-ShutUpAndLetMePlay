@@ -32,3 +32,4 @@ EXPORTS
     GetSystemTime
     CreateMutexW
     DeleteFileW
+    GetTickCount64

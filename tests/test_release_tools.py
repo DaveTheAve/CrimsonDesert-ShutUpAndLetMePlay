@@ -1,6 +1,8 @@
 """Game-file-free regression tests. No network or external account access."""
 from __future__ import annotations
 import contextlib
+from datetime import date
+import json
 import io
 import os
 import re
@@ -17,7 +19,8 @@ sys.path.insert(0, str(ROOT/'tools'))
 from make_version_resource import make_resource
 from verify_binary import version_block, verify
 from repository_files import allowed, inventory
-from package_release import archive
+from package_release import archive, STAMP
+from prepare_release import release_notes
 
 class ReleaseToolsTests(unittest.TestCase):
     def test_resource_is_deterministic(self):
@@ -33,10 +36,6 @@ class ReleaseToolsTests(unittest.TestCase):
     def test_source_allowlist(self):
         for name in ('README.md', '.gitignore', '.github/workflows/ci.yml', 'source/Behavior.h', 'tests/reference.json'):
             self.assertTrue(allowed(name), name)
-    def test_approved_media_allowlist(self):
-        self.assertTrue(allowed('assets/Shut Up and Let Me Play - Header Image.png'))
-        self.assertTrue(allowed('assets/Shut Up and Let Me Play - Title Image.png'))
-        self.assertFalse(allowed('assets/random.png'))
     def test_unsafe_paths_and_captures_rejected(self):
         for name in ('../bad.txt', '/absolute.txt', r'source\bad.cpp', 'CrimsonDesert.exe',
                      'source/mod.dll', 'tests/fake.zip', 'tests/report.log',
@@ -55,19 +54,124 @@ class ReleaseToolsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             root=Path(t);(root/'README.md').write_text('source');(root/'CONTRIBUTING.md').symlink_to(root/'README.md')
             with self.assertRaises(ValueError): inventory(root)
+    def test_generated_source_manifest_not_repackaged(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);(root/'README.md').write_bytes(b'example')
+            (root/'CHECKSUMS.md').write_bytes(b'generated manifest')
+            self.assertEqual(inventory(root), {'README.md':b'example'})
     def test_archive_integrity_and_manifest(self):
         with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
             p=Path(t)/'a.zip';archive(p, {'README.md':b'example'}, prefix='Source/')
             with zipfile.ZipFile(p) as z:
                 self.assertEqual(z.read('Source/README.md'),b'example')
                 self.assertIn('Source/CHECKSUMS.md',z.namelist())
-    def test_png_is_stored_without_archive_compression(self):
+    def test_png_bytes_are_stored_unchanged(self):
         with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
             p=Path(t)/'media.zip';data=b'\x89PNG\r\n\x1a\nunchanged'
             archive(p, {'assets/image.png':data})
             with zipfile.ZipFile(p) as z:
                 self.assertEqual(z.read('assets/image.png'), data)
                 self.assertEqual(z.getinfo('assets/image.png').compress_type, zipfile.ZIP_STORED)
+    def test_approved_media_allowlist(self):
+        self.assertTrue(allowed('assets/Shut Up and Let Me Play - Header Image.png'))
+        self.assertTrue(allowed('assets/Shut Up and Let Me Play - Title Image.png'))
+        self.assertFalse(allowed('assets/random.png'))
+    def test_draft_version_mismatch_rejected(self):
+        result=subprocess.run([sys.executable,str(ROOT/'tools/prepare_release.py'),'v99999.99999.99999'],capture_output=True,text=True)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('Tag does not match',result.stderr)
+    def test_no_automatic_release_workflow(self):
+        workflows = set(p.name for p in (ROOT/'.github/workflows').glob('*.yml'))
+        self.assertEqual(workflows, {'ci.yml', 'release.yml'})
+        text=(ROOT/'.github/workflows/release.yml').read_text()
+        self.assertIn('workflow_dispatch:', text)
+        self.assertNotRegex(text, r'(?m)^  (push|pull_request):')
+        self.assertIn("if: github.ref == 'refs/heads/main'", text)
+    def test_nexus_text_inventory(self):
+        name = 'release/NEXUS_DESCRIPTION.txt'
+        self.assertTrue(allowed(name))
+        self.assertFalse(allowed('release/unrelated.txt'))
+        path = ROOT/name
+        self.assertEqual(list(path.parent.glob(path.stem + '.*')), [path])
+        self.assertEqual(inventory(ROOT)[name], path.read_bytes())
+    def test_nexus_uses_approved_bbcode_and_cutscene_joke(self):
+        text=(ROOT/'release/NEXUS_DESCRIPTION.txt').read_text()
+        self.assertTrue(text.startswith('[heading]An Actual Skip Button for Crimson Desert[/heading]'))
+        quote=re.search(r'\[quote\](.*?)\[/quote\]', text, re.S).group(1)
+        self.assertNotIn('dialogue', quote.lower())
+        self.assertIn('What if the cutscene happened at ludicrous speed?', quote)
+        self.assertIn('What if the cutscene stopped happening?', quote)
+        self.assertIn('cutscenes and dialogue.', text)
+        self.assertNotIn('<h', text)
+    def test_readme_header_and_quote(self):
+        text=(ROOT/'README.md').read_text()
+        self.assertIn('Header%20Image.png',text.splitlines()[0])
+        quote='\n'.join(line for line in text.splitlines() if line.startswith('> **Other') or line.startswith('> **This mod'))
+        self.assertNotIn('dialogue',quote.lower())
+        self.assertIn('What if the cutscene stopped happening?',quote)
+        intro = text.split('## The revolutionary feature list', 1)[0]
+        self.assertEqual([line for line in intro.splitlines() if line.startswith('>')], [
+            '> **Other “skip” mods:** *What if the cutscene happened at ludicrous speed?*  ',
+            '> **This mod:** *What if the cutscene stopped happening?*',
+        ])
+        self.assertIn('Enter a supported gameplay cutscene, hold the native Skip button, '
+                      'and enjoy the breathtaking cinematic experience of '
+                      '**not being in the cinematic anymore**.', text)
+        self.assertIn('**latest release** from [Releases](', text)
+        self.assertIn('/releases/latest)', text)
+    def test_release_metadata_is_consistent(self):
+        version = re.search(r'#define\s+SULMP_VERSION\s+"([0-9.]+)"',
+                            (ROOT/'source/Version.h').read_text()).group(1)
+        fields = json.loads((ROOT/'release/NEXUS_FIELDS.json').read_text())
+        self.assertEqual(fields['version'], version)
+        self.assertEqual(fields['main_file'], f'ShutUpAndLetMePlay-{version}.zip')
+        self.assertEqual(fields['optional_source'], f'ShutUpAndLetMePlay-{version}-Source.zip')
+        self.assertNotIn('publication_state', fields)
+        heading = (ROOT/'docs/VALIDATION.md').read_text().splitlines()[0]
+        self.assertEqual(heading, f'# Validation — {version}')
+        changelog = (ROOT/'CHANGELOG.md').read_text()
+        entries = re.findall(r'^## ([0-9.]+) — (\d{4}-\d{2}-\d{2})$', changelog, re.M)
+        self.assertEqual(entries[0][0], version)
+        self.assertEqual(date.fromisoformat(entries[0][1]), date(*STAMP[:3]))
+    def test_release_notes_use_current_changelog(self):
+        version = json.loads((ROOT/'release/NEXUS_FIELDS.json').read_text())['version']
+        notes = release_notes(ROOT, version)
+        self.assertIn(f'## {version} — ', notes)
+        self.assertIn('supported NPC dialogue', notes)
+        self.assertNotIn('# Changelog', notes)
+        self.assertNotIn('First public release.', notes)
+        links = re.findall(r'\]\(([^)]+)\)', notes)
+        self.assertTrue(links)
+        for link in links:
+            self.assertIn(f'/blob/v{version}/', link)
+        self.assertTrue(notes.endswith('**Hold Skip. Resume game. Enjoy your time. #VivaLaSkip**\n'))
+    def test_release_notes_require_one_dated_entry(self):
+        samples = ('# Changelog\n', '## 2.3.4\n\nExample\n',
+                   '## 2.3.4 — 2026-02-30\n\nExample\n',
+                   '## 2.3.4 — 2026-09-20\n\n',
+                   '## 2.3.4 — 2026-09-20\n\nExample\n## 2.3.4 — 2026-09-20\nExample\n')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for text in samples:
+                with self.subTest(changelog=text):
+                    (root/'CHANGELOG.md').write_text(text, encoding='utf-8')
+                    with self.assertRaises(ValueError):
+                        release_notes(root, '2.3.4')
+    def test_release_notes_do_not_include_other_versions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'CHANGELOG.md').write_text(
+                '# Changelog\n\n## 2.3.4 — 2026-09-20\n\n- Current change.\n\n'
+                '## 2.3.3 — 2026-09-19\n\n- Previous change.\n', encoding='utf-8')
+            notes = release_notes(root, '2.3.4')
+            self.assertIn('- Current change.', notes)
+            self.assertNotIn('Previous change.', notes)
+            self.assertNotIn('2.3.3', notes)
+    def test_package_rejects_windows_escape(self):
+        with tempfile.TemporaryDirectory() as t:
+            for name in ('C:/bad.md', r'..\bad.md'):
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    archive(Path(t)/'bad.zip',{name:b'x'})
     def test_archive_is_reproducible(self):
         with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
             a,b=Path(t)/'a.zip',Path(t)/'b.zip'
@@ -85,9 +189,4 @@ class ReleaseToolsTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()): verify(ROOT/'ShutUpAndLetMePlay.asi', version)
     def test_wrong_binary_version_rejected(self):
         with self.assertRaises(AssertionError): verify(ROOT/'ShutUpAndLetMePlay.asi', '65535.65535.65535')
-    def test_draft_version_mismatch_rejected(self):
-        result=subprocess.run([sys.executable,str(ROOT/'tools/prepare_release.py'),'v99999.99999.99999'],capture_output=True,text=True)
-        self.assertNotEqual(result.returncode,0)
-        self.assertIn('Tag does not match',result.stderr)
-
 if __name__ == '__main__': unittest.main()

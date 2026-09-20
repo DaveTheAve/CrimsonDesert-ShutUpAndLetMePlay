@@ -1,21 +1,9 @@
 # Security and sensitive reports
 
-For ordinary mod bugs, use the bug-report form. Include only the requested
-current diagnostics and relevant environment details, not game binaries,
-private saves, account data, credentials or full process dumps.
+For ordinary mod bugs, include the two current diagnostic files from the same run, game/mod/loader versions, input device, relevant other mods, and the affected cutscene or conversation. Do not post game binaries, private saves, account data, credentials, or full process dumps.
 
-For a security-sensitive problem, use GitHub's private vulnerability-reporting
-feature when the maintainer has enabled it. Otherwise open a minimal issue
-asking for a private contact route, without posting sensitive details publicly.
-No private contact address or response-time commitment is invented here.
+For sensitive issues, use GitHub's private vulnerability reporting when enabled. Otherwise request a private contact route without posting sensitive details publicly.
 
-The ASI changes two native entry points in the running game after validation.
-It does not implement network requests, an updater or executable-on-disk
-patching. Those facts do not make an unsigned native plugin risk-free. Verify
-where binaries came from and inspect source/checksums; do not disable security
-software just to install the mod. Structural checks are not malware certification.
+The unsigned ASI changes verified native entry points in the running game. It does not patch the executable on disk, perform network requests, self-update, or choose conversation responses. Native plugins can still crash the game or affect scripted behavior. Structural checks and checksums are not antivirus certification or a guarantee of every quest outcome. Keep normal save backups; do not disable security software to install the mod.
 
-The supplied workflows use pinned actions and read-only build jobs. Only the
-separate manual draft-creation job has release-write permission; it does not
-check out or execute repository code. Review workflow/dependency changes.
-Do not add a self-hosted runner containing game files/secrets for public PRs.
+The build workflow has read-only repository permissions. The separate, manually invoked draft-release workflow is restricted to `main`; only its draft-creation job has release-write permission and it does not execute repository source. Review workflow changes. Do not attach public PRs to a self-hosted runner containing game files or secrets.

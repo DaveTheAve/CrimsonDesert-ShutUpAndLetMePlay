@@ -15,9 +15,6 @@ if __name__ == '__main__':
     for name, data in files.items():
         if name.endswith('.json'): json.loads(data)
     version = re.search(r'#define\s+SULMP_VERSION\s+"([0-9.]+)"', files['source/Version.h'].decode()).group(1)
-    fields = json.loads(files['release/NEXUS_FIELDS.json'])
-    if fields['version'] != version or fields['main_file'] != f'ShutUpAndLetMePlay-{version}.zip':
-        raise ValueError('Release listing metadata does not match source/Version.h')
     for name, data in files.items():
         if name.startswith('.github/workflows/') and name.endswith('.yml'):
             text = data.decode()

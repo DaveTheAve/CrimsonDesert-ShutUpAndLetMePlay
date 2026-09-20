@@ -1,2 +1,2 @@
 #pragma once
-#define SULMP_VERSION "1.0.0"
+#define SULMP_VERSION "2.0.0"

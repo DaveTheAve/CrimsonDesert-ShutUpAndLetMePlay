@@ -1,44 +1,31 @@
 # Publishing on GitHub and Nexus
 
-## Repository preparation
+Repository: https://github.com/DaveTheAve/CrimsonDesert-ShutUpAndLetMePlay
 
-Suggested repository name: **CrimsonDesert-ShutUpAndLetMePlay**.  
-Suggested description: **An actual native cutscene Skip button for Crimson Desert — because fast-forward is a different verb. Windows x64 ASI mod.**
+Project description: **An actual native Skip button for Crimson Desert cutscenes and NPC dialogue — because fast-forward is a different verb.**
 
-Public repository: **https://github.com/DaveTheAve/CrimsonDesert-ShutUpAndLetMePlay**. Repository contents, including `.github`, `.gitignore`, the source folders, and approved artwork under `assets/`, belong at repository root. Compiled release archives do not.
+## Release files
 
-Review the staged files and run `python3 tools/check_repository.py --tracked` before pushing. Compiled ASIs belong in release downloads, not source history. Never push the game executable or raw diagnostics.
+Version: **2.0.0**. Tag: **v2.0.0**.
 
-## First release
+Use `ShutUpAndLetMePlay-2.0.0.zip` as the player download and `ShutUpAndLetMePlay-2.0.0-Source.zip` as the optional source download. Keep the same exact player ZIP on GitHub and Nexus. The changelog records this version under **2026-09-20**.
 
-Use version **1.0.0** and tag **v1.0.0** for this source/binary pair. The supplied player ZIP can be attached directly to a manually prepared GitHub release and to Nexus. Use the **same exact player ZIP** on both sites.
+`python3 tools/package_release.py` writes checksummed archives in `dist/`. The manually invoked **Prepare draft release** workflow runs from `main`, builds an existing version tag, verifies that it matches `source/Version.h`, and creates a draft for review. It neither automatically publishes nor overwrites an existing release. Build jobs have read-only permissions; the separate draft-creation job does not execute repository source.
 
-Alternatively, push the version tag and run **Prepare draft release** from the Actions tab, entering the existing tag. It builds the tagged source, verifies the version, and creates a **draft**, never an automatically published release. An existing release for that tag is not overwritten. Publishing remains a maintainer decision.
-
-Build jobs have read-only repository permissions. The separate draft job has the minimum release permissions needed to create the draft and does not check out or execute repository code.
+Generated release notes contain the matching version's changelog entry, installation links, and validation information. `BUILD_INFO.json` identifies the exact source commit, compiler, linker, and ASI checksum. Review the files and publish the draft through GitHub's release page.
 
 ## Nexus page
 
-Use the player ZIP as the main file and optionally the Source ZIP as a separate developer download. The publishing kit is not an installable mod.
+Use the player ZIP as the main file and the Source ZIP as an optional developer download. The publishing kit is page material, not an installable mod.
 
-Use `release/NEXUS_FIELDS.json` for listing metadata, `release/NEXUS_DESCRIPTION.md` for the description, and `release/PINNED_POST.md` for the support post. The Nexus description file uses simple HTML even though it retains the `.md` filename so there is only one maintained description copy: paste its raw contents into Nexus **Code View** (`</>`), then leave Code View to preview it. Do not paste Markdown syntax into Code View. Apply all required tags listed in `NEXUS_FIELDS.json`.
+`release/NEXUS_DESCRIPTION.txt` contains the approved **BBCode** description. Copy its raw contents into the Nexus BBCode/source editor; do not run it through a Markdown or HTML converter. `release/NEXUS_FIELDS.json` supplies listing metadata and required tags. `release/PINNED_POST.md` supplies support copy.
 
-List a compatible x64 ASI loader as a separate requirement. Select the closest available Gameplay/User Interface category. Do not advertise untested automatic mod-manager installation.
+List a compatible **x64 ASI loader** as a separate requirement. The ASI goes in that loader's supported mod/plugin directory; executable-adjacent setups normally use `bin64`. Do not advertise untested automatic mod-manager installation.
 
-The approved artwork lives in `assets/`:
+The approved artwork is under `assets/`. The README uses **Shut Up and Let Me Play - Header Image.png**; **Shut Up and Let Me Play - Title Image.png** is also available for the Nexus page. Source and publishing archives retain their exact bytes. Genuine gameplay screenshots, not promotional art, should demonstrate the in-game prompt.
 
-- `assets/Shut Up and Let Me Play - Header Image.png`
-- `assets/Shut Up and Let Me Play - Title Image.png`
+## Repository and license
 
-Keep those PNGs byte-for-byte as committed: do not resize, recompress, optimize, or convert them. Packaging stores PNG entries without ZIP compression as an extra safeguard against needless processing. For gameplay gallery images, use authentic in-game screenshots of the visible native Skip prompt rather than fabricated gameplay UI.
+Commit source, documentation, tooling, tests, and approved artwork—not game files, private logs, or compiled output. Run `python3 tools/check_repository.py --tracked` and inspect the staged files before pushing.
 
-## Licensing
-
-The project is licensed under the MIT License. Keep `LICENSE` in the repository and source distributions.
-
-## Useful references
-
-- Nexus file submission guidelines: https://help.nexusmods.com/article/28-file-submission-guidelines
-- GitHub secure workflow use: https://docs.github.com/en/actions/reference/security/secure-use
-- GitHub CLI releases: https://cli.github.com/manual/gh_release_create
-- Ultimate ASI Loader: https://github.com/ThirteenAG/Ultimate-ASI-Loader
+The project uses the MIT License. Include `LICENSE` in distributions.
