@@ -101,11 +101,11 @@ int main(int argc,char**argv){try{
     put32(base+cinematicResolved.symbols[Sym_AppearStyle],0x4321);put32(base+cinematicResolved.symbols[Sym_DisappearStyle],0x4320);
     typedShowStub(*game,cinematicResolved.symbols[Sym_Show],(void*)mockShow);typedShowStub(*game,cinematicResolved.symbols[Sym_Hide],(void*)mockHide);
     for(U32 r:{cinematicResolved.symbols[Sym_InvalidateStyle],cinematicResolved.symbols[Sym_SortStyles],cinematicResolved.symbols[Sym_ClearEvent],
-        0xCB6990u,0xCC0190u,0xCC2A70u,0xCC2100u,0x3EF80B0u})stub(*game,r,(void*)noOperation);
+        referenceUi(0xCB6990u),referenceUi(0xCC0190u),referenceUi(0xCC2A70u),referenceUi(0xCC2100u),referenceUi(0x3EF80B0u)})stub(*game,r,(void*)noOperation);
     if(scenario=="seq_shape")base[sequenceResolved.skip]^=1;
     if(scenario=="seq_callback")base[sequenceResolved.symbols[SequencerSymCallback]+1]^=1;
     if(scenario=="seq_ambiguous"){
-        U32 hole=gameImage.codeRva+gameImage.codeSize-4096;
+        U32 hole=gameImage.sections[0].rva+gameImage.sections[0].size-4096;
         std::memcpy(base+hole,base+sequenceResolved.skip,SequencerSkipPattern.shape.size);
     }
     auto asi=loadPE(argv[2],true);asiBase=asi->b;linkImports(asi->b);U32 op=u32(asi->b+0x3C)+24;

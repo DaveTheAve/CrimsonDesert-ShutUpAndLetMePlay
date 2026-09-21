@@ -57,7 +57,10 @@ def main() -> None:
         notes = release_notes(root, version)
     except ValueError as error:
         parser.error(str(error))
-    names = [f'ShutUpAndLetMePlay-{version}.zip', f'ShutUpAndLetMePlay-{version}-Source.zip', 'BUILD_INFO.json']
+    names = [f'ShutUpAndLetMePlay-{version}.zip',
+             f'ShutUpAndLetMePlay-{version}-Source.zip',
+             f'ShutUpAndLetMePlay-{version}-Nexus-Publishing-Kit.zip',
+             'BUILD_INFO.json']
     for name in names:
         if not (root/'dist'/name).is_file():
             parser.error(f'Missing build asset: {name}; run tools/ci.sh first')

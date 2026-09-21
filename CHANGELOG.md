@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1 — 2026-09-21
+
+- Restores compatibility with executable file version 1.0.0.2949.
+- Finds native code by executable-section attributes instead of section names, preserving full signature and cross-reference validation.
+- Adds detailed image-validation diagnostics and regression coverage for renamed and multiple executable sections.
+
 ## 2.0.0 — 2026-09-20
 
 - Adds manual native hold-to-skip for supported NPC dialogue as well as gameplay cutscenes.

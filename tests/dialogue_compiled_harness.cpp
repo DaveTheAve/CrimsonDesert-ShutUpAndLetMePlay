@@ -20,7 +20,7 @@ static void runCompiledDialogue(){
     }
     stub(*fixtureGame,npcResolved.finish,(void*)finishFixture);
     stub(*fixtureGame,npcResolved.symbols[DialogueSymStopVoice],(void*)stopFixtureVoice);
-    stub(*fixtureGame,0x388E00,(void*)lookupFixture);stub(*fixtureGame,0x433650,(void*)lookupFixture);stub(*fixtureGame,0xC007B0,(void*)dispatchFixture);
+    stub(*fixtureGame,0x388E00,(void*)lookupFixture);stub(*fixtureGame,0x433650,(void*)lookupFixture);stub(*fixtureGame,referenceUi(0xC007B0),(void*)dispatchFixture);
     if(scenario=="npc_choice"){
         fixtureGame->executable(0x5B592D,14);jump(base+0x5B592D,base+0x5B67CE);
     }
@@ -89,7 +89,7 @@ int main(int argc,char**argv){try{
     put32(base+cinematicResolved.symbols[Sym_AppearStyle],0x4321);put32(base+cinematicResolved.symbols[Sym_DisappearStyle],0x4320);
     typedShowStub(*game,cinematicResolved.symbols[Sym_Show],(void*)mockShow);typedShowStub(*game,cinematicResolved.symbols[Sym_Hide],(void*)mockHide);
     for(U32 r:{cinematicResolved.symbols[Sym_InvalidateStyle],cinematicResolved.symbols[Sym_SortStyles],cinematicResolved.symbols[Sym_ClearEvent],
-        0xCB6990u,0xCC0190u,0xCC2A70u,0xCC2100u,0x3EF80B0u})stub(*game,r,(void*)noOperation);
+        referenceUi(0xCB6990u),referenceUi(0xCC0190u),referenceUi(0xCC2A70u),referenceUi(0xCC2100u),referenceUi(0x3EF80B0u)})stub(*game,r,(void*)noOperation);
     if(scenario=="npc_shape")base[npcResolved.update+15]^=1;
     auto asi=loadPE(argv[2],true);asiBase=asi->b;linkImports(asi->b);U32 op=u32(asi->b+0x3C)+24;
     asi->executable(u32(asi->b+op+20),u32(asi->b+op+4));dllMain=(int(NATIVE_ABI*)(void*,W32,void*))(asi->b+u32(asi->b+op+16));

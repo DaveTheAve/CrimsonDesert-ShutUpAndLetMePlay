@@ -16,18 +16,14 @@ struct DialogueResolved {
     bool ready=false;
 };
 inline bool executableRange(const Image& im,U32 r,U32 n=1) {
-    if(!im.range(r,n))return false;
-    const U8*b=im.base;U32 nt=u32(b+0x3C),os=u16(b+nt+20),count=u16(b+nt+6);
-    for(U32 i=0;i<count;++i){const U8*s=b+nt+24+os+i*40;U32 va=u32(s+12),size=u32(s+8);
-        if((u32(s+36)&0x20000000u)&&r>=va&&r-va<size&&n<=size-(r-va))return true;}
-    return false;
+    return im.code(r,n);
 }
 inline bool dialogueUnwind(const Image&im,U32 r,const DialoguePattern&p) {
     U32 lo=0,hi=im.exceptionSize/12;
     while(lo<hi){U32 m=lo+(hi-lo)/2;const U8*e=im.base+im.exceptionRva+12*m;if(u32(e)<r)lo=m+1;else hi=m;}
     if(lo==im.exceptionSize/12)return false;
     const U8*e=im.base+im.exceptionRva+lo*12;U32 uw=u32(e+8);
-    return u32(e)==r&&u32(e+4)==r+p.shape.size&&im.range(uw,p.unwindSize)&&same(im.base+uw,p.unwind,p.unwindSize);
+    return u32(e)==r&&u32(e+4)==r+p.shape.size&&im.accessible(uw,p.unwindSize)&&same(im.base+uw,p.unwind,p.unwindSize);
 }
 inline bool dialogueReferences(const Image&im,U32 r,const DialoguePattern&p,DialogueResolved&z) {
     for(U32 i=0;i<p.refCount;++i){const auto&q=p.refs[i];U32 target=relative(im,r,q.displacement,q.next);

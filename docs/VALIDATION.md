@@ -1,16 +1,36 @@
-# Validation — 2.0.0
+# Validation — 2.0.1
+
+## Executable-update compatibility
+
+Both exact executable references in `tests/reference.json` are covered: file versions **1.0.0.2944** and **1.0.0.2949**. The newer file has SHA-256:
+
+`a9e5ca2076367e7995b81a3a4803f7259ab7dac3415df8ea949043ef635a174a`
+
+The updated executable names its first executable section `.sbss`, not `.code`. All original masked cinematic, interaction-dialogue and sequencer signatures still match, with the cinematic functions relocated by 16 bytes. No signature bytes or masks were loosened.
+
+Image parsing and scans now use PE executable-section characteristics and bounded section extents. A match must remain unique across all executable sections. Unreadable executable regions, malformed or overlapping sections, invalid exception metadata, and changed or ambiguous native code fail closed. Matched unwind records and literal references also have read-access checks.
+
+The `image_validation` report identifies header, section-access and exception-directory failures separately, includes section names/attributes/RVAs without paths or process addresses, and safely quotes arbitrary section-name bytes.
+
+The reported Epic-store failure occurred during image validation. Removing section-name assumptions addresses that class of failure; an actual Epic executable was not supplied, so Epic runtime compatibility is not established by these results. Renamed `.text`, repeated/arbitrary names and split code sections are synthetic tests, not a claim to have run the Epic build.
 
 ## Reference and build identity
 
-The licensed reference executable has file version **1.0.0.2944**, SHA-256:
+The original licensed reference executable has file version **1.0.0.2944**, SHA-256:
 
 `6d348be9d52f81bd35cf7c55e73a5dbfc96cc8268438387c91f7f62c82381fa7`
 
-The executable is not distributed. Each locally generated archive includes `CHECKSUMS.md`; `dist/BUILD_INFO.json` records the compiler, source commit, and ASI hash for that build. A local LLVM 17 result is not assumed byte-identical to an LLVM 18 result.
+The executable is not distributed. Player, source, and Nexus-publishing archives include `CHECKSUMS.md`; the repository-root archive is covered by the external checksum manifest; `dist/BUILD_INFO.json` records the compiler, source commit, and ASI hash for that build. A local LLVM 17 result is not assumed byte-identical to an LLVM 18 result.
 
 ## In-game observations
 
-The maintainer reported successful skipping in NPC dialogue with white-background subtitles, NPC dialogue with black-background subtitles, and normal cutscenes. The accompanying paired diagnostics show an accepted interaction request, native progression and completion activity, sequence-mode-0 prompt repairs and hold forwarding, and a normal cutscene prompt repair, with no recorded guard or write errors.
+### 2.0.1 compatibility confirmation
+
+On 2026-09-21, the maintainer confirmed that 2.0.1 works in game with the updated executable, file version **1.0.0.2949**. This is an in-game report, separate from the isolation results below. No new diagnostic pair accompanied that confirmation, so no per-route counters or additional scene coverage are attributed to it. Epic-store runtime compatibility remains unverified.
+
+### Earlier cutscene and dialogue coverage
+
+On executable file version **1.0.0.2944**, the maintainer reported successful skipping in NPC dialogue with white-background subtitles, NPC dialogue with black-background subtitles, and normal cutscenes. The accompanying paired diagnostics show an accepted interaction request, native progression and completion activity, sequence-mode-0 prompt repairs and hold forwarding, and a normal cutscene prompt repair, with no recorded guard or write errors.
 
 The capture did not exercise sequence mode 2 or a response-choice stop. Those paths have isolation coverage, not new in-game proof from that session. The counters do not identify subtitle colours. Build verification and in-game observations are separate forms of evidence; neither establishes coverage of every scene or quest outcome.
 
@@ -28,14 +48,14 @@ Native control modes identify distinct routes, not subtitle colours. Runtime cou
 
 ## Local results
 
-- Cutscene isolation: **8,085 assertions**, including **300 hide/reappear cycles**.
-- Interaction-dialogue isolation: **702 assertions**, including native
+- Cutscene isolation: **8,087 assertions per reference**, including **300 hide/reappear cycles**.
+- Interaction-dialogue isolation: **704 assertions per reference**, including native
   progression, choice-wait and entry-event dispatch under the mocks below.
-- Compiled ASI: **47 scenarios** — 21 core/startup/failure cases, 13 interaction
-  cases and 13 additional sequence-route cases.
-- Paired diagnostics: **44 JSON/log pairs** parsed and cross-checked. Three
+- Compiled ASI: **59 scenarios per reference** — 21 core/startup/failure cases, 12 image-layout/access cases, 13 interaction cases and 13 sequence-route cases.
+- Paired diagnostics: **56 JSON/log pairs per reference** parsed and cross-checked. Three
   intentional no-output cases do not create a pair.
-- Game-file-free Python/tooling checks include signature/mask consistency, packaging, unchanged PNG storage, and publication guards.
+- Synthetic image/scanner tests: **24,095 assertions**, including **12,000 deterministic comparisons** of the optimized masked scan with an exhaustive oracle.
+- **38 game-file-free Python/tooling tests** include signature/mask consistency, packaging, unchanged PNG storage, release-metadata consistency, complete checksummed release handoffs, and publication guards.
 - Repeat-build identity, archive CRC/member checksums and an extracted-source
   rebuild were checked.
 
@@ -127,7 +147,7 @@ game's native sequence transition controls what happens next.
 
 ## Reference native routes
 
-These RVAs identify the inspected executable for local auditing. They are
+These RVAs identify the original 1.0.0.2944 executable for local auditing; the updated RVAs are in `tests/reference.json`. They are
 not fixed runtime addresses in the mod.
 
 | Route | Reference RVA |

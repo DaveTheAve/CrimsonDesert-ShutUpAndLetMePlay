@@ -74,5 +74,65 @@
       "mask_sha256": "016f6f3fadd097d06ddf0ba221cdbd4e5d5c3a5edd26275ed02bb2422a235c18",
       "references": 9
     }
-  }
+  },
+  "additional_references": [
+    {
+      "file_version": "1.0.0.2949",
+      "executable_sha256": "a9e5ca2076367e7995b81a3a4803f7259ab7dac3415df8ea949043ef635a174a",
+      "timestamp": "0x6ab0b06d",
+      "image_size": "0x17479000",
+      "functions": {
+        "Interaction": {
+          "rva": "0x1069290",
+          "length": 484,
+          "sha256": "460865d5c2c31c4e952868113a72e92a85a2087005ab28c5d0bc3a6cf2968d90"
+        },
+        "CinemaAppearance": {
+          "rva": "0x1068a00",
+          "length": 2178,
+          "sha256": "a3fbf59c89aa0e109aa3dca7244a40d752c120435e55114fd3df7accf6429467"
+        },
+        "SetKeyguideAppearance": {
+          "rva": "0xcbe490",
+          "length": 267,
+          "sha256": "dc3fe5a444468d5ef901072f0e7b4f435379a35166a48ac67c0f90316ec1b520"
+        },
+        "DialogueInput": {
+          "rva": "0x1063530",
+          "length": 2964,
+          "sha256": "99bc08f326ced95c16f3020aa48c72e29af2035bacdd64c6e02c72916cf8bddb"
+        },
+        "DialogueUpdate": {
+          "rva": "0x5b7b70",
+          "length": 2130,
+          "sha256": "b6cf7e48dfb88272c00455094aadd61600fab1302e99f3e428f94deacd6bc70f"
+        },
+        "DialogueAdvance": {
+          "rva": "0x5b5640",
+          "length": 4749,
+          "sha256": "06681ae4985ba42e3c13372d636e6547c9841abba835d93da5fca361b3b0a722"
+        },
+        "DialogueCurrent": {
+          "rva": "0x5b7a50",
+          "length": 285,
+          "sha256": "9a0c9b77998e8e4a549a1964b1112369c768b7cd14a7aa82e8178436c493716e"
+        },
+        "DialogueFinish": {
+          "rva": "0x5b6920",
+          "length": 834,
+          "sha256": "0f5d3abeabd59d634c02e8674e0eeb0fad27f9c2e0e01ec5c40c6d541d8bbb07"
+        },
+        "SequencerSkip": {
+          "rva": "0xa991d0",
+          "length": 705,
+          "sha256": "7fc6924e7200aa3b3710cd1e2ee669279cca6265daeb1e7200d3ef777cc5817e"
+        },
+        "SequencerFinish": {
+          "rva": "0xa994a0",
+          "length": 808,
+          "sha256": "34344cb600ceda000889d266dd31351d123c0e949bf119760e578fefb5874427"
+        }
+      }
+    }
+  ]
 }

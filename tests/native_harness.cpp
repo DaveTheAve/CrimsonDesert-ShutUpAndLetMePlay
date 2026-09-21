@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include "../source/Behavior.h"
 using namespace crimson;
+#include "reference_profiles.h"
 static unsigned checks=0;
 #define CHECK(x) do { ++checks; if(!(x)){std::cerr<<"FAIL line "<<__LINE__<<": "<<#x<<"\n";std::abort();}}while(0)
 struct Memory {
@@ -21,7 +22,9 @@ struct Memory {
 };
 static std::vector<std::pair<const U8*,size_t>> regions;
 static bool validRead(const void*p,U32 n){U64 a=(U64)p;for(auto&r:regions){U64 b=(U64)r.first;if(a>=b&&a-b<=r.second&&n<=r.second-(a-b))return true;}return false;}
-static Behavior behavior;static U8*base;static unsigned invalidations=0,shows=0,hideCalls=0,activations=0,deactivations=0;static void*skipWrapper=nullptr;
+static Behavior behavior;
+static U32 referenceUi(U32 original){return original+referenceCodeDelta(behavior.image);}
+static U8*base;static unsigned invalidations=0,shows=0,hideCalls=0,activations=0,deactivations=0;static void*skipWrapper=nullptr;
 static std::vector<void*> allowedWidgets;
 static void set(void*p,unsigned o,void*v){std::memcpy((U8*)p+o,&v,8);}
 static void NATIVE_ABI mockShow(void*p){CHECK(p);bool valid=false;for(void*w:allowedWidgets)valid|=w==p;CHECK(valid);((U8*)p)[0xBD]=1;((U8*)p)[0xBE]=0;++shows;}
@@ -75,12 +78,14 @@ struct Fixture {
 };
 int main(int argc,char**argv){try{
     if(argc!=2)throw std::runtime_error("usage: native_harness path/to/CrimsonDesert.exe");
-    std::ifstream in(argv[1],std::ios::binary);std::vector<U8>file((std::istreambuf_iterator<char>(in)),{});CHECK(file.size()>0x1000);
+    std::ifstream in(argv[1],std::ios::binary|std::ios::ate);CHECK(in);auto length=in.tellg();CHECK(length>4096);
+    std::vector<U8>file((size_t)length);in.seekg(0);in.read((char*)file.data(),length);CHECK(in);
     U32 nt=u32(file.data()+0x3C),opt=nt+24,size=u32(file.data()+opt+56);Memory memory(size);base=memory.b;
     std::memcpy(base,file.data(),0x1000);U32 n=u16(file.data()+nt+6),os=u16(file.data()+nt+20);
     for(U32 i=0;i<n;++i){const U8*s=file.data()+opt+os+40*i;U32 va=u32(s+12),raw=u32(s+20),len=u32(s+16);CHECK(raw+len<=file.size()&&va+len<=size);std::memcpy(base+va,file.data()+raw,len);}
     Image image;CHECK(parseImage(base,image));Resolved resolved;CHECK(resolve(image,resolved));
-    CHECK(resolved.interaction==0x1069280&&resolved.appearance==0x10689F0&&resolved.setAppearance==0xCBE480);
+    U32 delta=referenceCodeDelta(image);
+    CHECK(resolved.interaction==0x1069280+delta&&resolved.appearance==0x10689F0+delta&&resolved.setAppearance==0xCBE480+delta);
     std::cout<<"PASS resolver: unique complete function shapes, symbol cross-checks, literal style names, native Skip call, unwind records\n";
     // Wrong native field offsets, wrong literal identity, and existing entry hooks must fail closed.
     U8 original=base[resolved.appearance+0x38];base[resolved.appearance+0x38]^=1;Resolved bad;CHECK(!resolve(image,bad));base[resolved.appearance+0x38]=original;
@@ -98,7 +103,7 @@ int main(int argc,char**argv){try{
     stub(memory,resolved.symbols[Sym_Show],(void*)mockShow);stub(memory,resolved.symbols[Sym_Hide],(void*)mockHide);
     memory.executable(resolved.symbols[Sym_AddStyle],0x99);memory.executable(resolved.symbols[Sym_RemoveStyle],0x70);
     stub(memory,resolved.symbols[Sym_InvalidateStyle],(void*)invalidate);stub(memory,resolved.symbols[Sym_SortStyles],(void*)noOperation);stub(memory,resolved.symbols[Sym_ClearEvent],(void*)noOperation);
-    for(U32 r:{0xCB6990u,0xCC0190u,0xCC2A70u,0xCC2100u,0x3EF80B0u})stub(memory,r,(void*)noOperation);
+    for(U32 r:{referenceUi(0xCB6990u),referenceUi(0xCC0190u),referenceUi(0xCC2A70u),referenceUi(0xCC2100u),referenceUi(0x3EF80B0u)})stub(memory,r,(void*)noOperation);
     // Construct exactly the 15-byte relocation-free prologue trampolines used by the ASI.
     Memory trampolines(4096);trampolines.executable(0,4096);
     std::memcpy(trampolines.b,base+resolved.interaction,15);jump(trampolines.b+15,base+resolved.interaction+15);

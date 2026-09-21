@@ -21,7 +21,7 @@ struct Diagnostics {
     wchar_t directory[2048]{};
     wchar_t path[2304]{};
     wchar_t temporary[2368]{};
-    char buffer[8192]{};
+    char buffer[24576]{};
     char session[64]{};
     U32 directoryLength = 0;
     U32 process = 0;
@@ -35,6 +35,16 @@ struct Diagnostics {
         for (U32 i = 0; text[i] && length + 1 < sizeof(buffer); ++i)
             buffer[length++] = text[i];
         buffer[length] = 0;
+    }
+    void quoted(const char* text) {
+        add("\"");
+        for (U32 i=0;text&&text[i];++i) {
+            U8 c=(U8)text[i];
+            if(c=='"'||c=='\\'){char escaped[3]={'\\',(char)c,0};add(escaped);}
+            else if(c<32||c>=127){char escaped[7]={'\\','u','0','0',"0123456789abcdef"[c>>4],"0123456789abcdef"[c&15],0};add(escaped);}
+            else {char plain[2]={(char)c,0};add(plain);}
+        }
+        add("\"");
     }
     void number(U64 value) {
         char digits[24];
@@ -128,7 +138,19 @@ struct Diagnostics {
         add(",\n  \"status\": \""); add(status); add("\",\n  \"reason\": \""); add(reason ? reason : "");
         add("\",\n  \"visual_verification\": \"not measured; counters verify native style state, not pixels\",\n  \"pe_timestamp\": \"");
         hex(image.timestamp); add("\",\n  \"image_size\": \""); hex(image.size);
-        add("\",\n  \"resolver\": {\n");
+        add("\",\n  \"image_validation\": {\n    \"stage\": "); quoted(image.stage);
+        add(",\n    \"reason\": "); if(image.failure)quoted(image.failure);else add("null");
+        add(",\n");field("machine", image.machine);field("optional_header_magic",image.optionalMagic);
+        field("header_size",image.headerSize);field("section_count",image.sectionCount);
+        field("executable_section_count",image.executableCount);state("failed_section_index",image.failedSection);
+        field("exception_directory_rva",image.exceptionRva);field("exception_directory_size",image.exceptionSize);
+        add("    \"sections\": [");
+        for(U32 i=0;i<image.sectionCount;++i){const auto&section=image.sections[i];
+            if(i)add(",");add("\n      {\"name\": ");quoted(section.name);
+            add(", \"rva\": ");number(section.rva);add(", \"size\": ");number(section.size);
+            add(", \"characteristics\": ");number(section.characteristics);add("}");
+        }
+        add("\n    ]\n  },\n  \"resolver\": {\n");
         field("interaction_rva", resolved.interaction);
         field("cinema_appearance_rva", resolved.appearance);
         field("set_keyguide_appearance_rva", resolved.setAppearance);
@@ -193,6 +215,8 @@ struct Diagnostics {
         add("ShutUpAndLetMePlay " SULMP_VERSION "\nSession: "); add(session);
         add("\nProcess ID: "); number(process); add("\nRevision: "); number(revision);
         add("\nStatus: "); add(status); add("\nReason: "); add(reason ? reason : "");
+        add("\nImage validation stage: ");add(image.stage);add("\nExecutable sections: ");number(image.executableCount);
+        if(image.failedSection>=0){add("\nUnreadable/invalid section index: ");number((U32)image.failedSection);}
         add("\nExecutable PE timestamp: "); hex(image.timestamp);
         add("\nExecutable image size: "); hex(image.size);
         add("\nAppearance repairs: "); number(s.appearanceRepairs);

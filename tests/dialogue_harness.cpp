@@ -68,7 +68,7 @@ int main(int argc,char**argv){
     CHECK(argc==2);auto game=loadPE(argv[1],false);base=game->b;
     CHECK(parseImage(base,gameImage)&&resolve(gameImage,cinematicResolved));
     CHECK(resolveDialogue(gameImage,cinematicResolved,npcResolved));
-    CHECK(npcResolved.input==0x1063520&&npcResolved.update==0x5B7B70&&npcResolved.advance==0x5B5640);
+    CHECK(npcResolved.input==0x1063520+referenceCodeDelta(gameImage)&&npcResolved.update==0x5B7B70&&npcResolved.advance==0x5B5640);
     std::cout<<"PASS dialogue resolver: distinct input/update/advance/current/finish shapes, linked cache getter, cross-reference and unwind checks\n";
     // Reject one-byte structural changes and inconsistent relative targets.
     for(U32 r:{npcResolved.input,npcResolved.update,npcResolved.advance,npcResolved.current,npcResolved.finish,npcResolved.database}){
@@ -85,9 +85,9 @@ int main(int argc,char**argv){
     put32(base+cinematicResolved.symbols[Sym_AppearStyle],0x4321);put32(base+cinematicResolved.symbols[Sym_DisappearStyle],0x4320);
     stub(*game,cinematicResolved.symbols[Sym_Show],(void*)mockShow);stub(*game,cinematicResolved.symbols[Sym_Hide],(void*)mockHide);
     for(U32 r:{cinematicResolved.symbols[Sym_InvalidateStyle],cinematicResolved.symbols[Sym_SortStyles],cinematicResolved.symbols[Sym_ClearEvent],
-        0xCB6990u,0xCC0190u,0xCC2A70u,0xCC2100u,0x3EF80B0u})stub(*game,r,(void*)noOperation);
+        referenceUi(0xCB6990u),referenceUi(0xCC0190u),referenceUi(0xCC2A70u),referenceUi(0xCC2100u),referenceUi(0x3EF80B0u)})stub(*game,r,(void*)noOperation);
     stub(*game,npcResolved.finish,(void*)finishFixture);
-    stub(*game,0x388E00,(void*)lookupFixture);stub(*game,0x433650,(void*)lookupFixture);stub(*game,0xC007B0,(void*)dispatchFixture);
+    stub(*game,0x388E00,(void*)lookupFixture);stub(*game,0x433650,(void*)lookupFixture);stub(*game,referenceUi(0xC007B0),(void*)dispatchFixture);
     // Test-only seam AFTER the actual native wait-for-choice flag assignment:
     // bypass allocation/rendering of choice UI, retaining normal journal dispatch.
     game->executable(0x5B592D,14);jump(base+0x5B592D,base+0x5B67CE);

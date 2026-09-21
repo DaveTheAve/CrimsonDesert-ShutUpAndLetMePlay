@@ -4,7 +4,7 @@ name: Prepare draft release
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag to build (for example v2.0.0)
+        description: Existing version tag to build (for example v2.0.1)
         required: true
         type: string
 
@@ -92,4 +92,5 @@ jobs:
             --title "Shut Up & Let Me Play: An Actual Skip Button $TAG" --notes-file RELEASE_NOTES.md \
             "ShutUpAndLetMePlay-$VERSION.zip" \
             "ShutUpAndLetMePlay-$VERSION-Source.zip" \
+            "ShutUpAndLetMePlay-$VERSION-Nexus-Publishing-Kit.zip" \
             BUILD_INFO.json CHECKSUMS.md

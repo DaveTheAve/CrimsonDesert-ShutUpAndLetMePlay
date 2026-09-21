@@ -1,6 +1,7 @@
 """Game-file-free regression tests. No network or external account access."""
 from __future__ import annotations
 import contextlib
+import hashlib
 from datetime import date
 import json
 import io
@@ -167,6 +168,85 @@ class ReleaseToolsTests(unittest.TestCase):
             self.assertIn('- Current change.', notes)
             self.assertNotIn('Previous change.', notes)
             self.assertNotIn('2.3.3', notes)
+    def test_publishing_guides_match_release_metadata(self):
+        fields = json.loads((ROOT/'release/NEXUS_FIELDS.json').read_text())
+        version = fields['version']
+        changelog = (ROOT/'CHANGELOG.md').read_text()
+        heading = re.search(r'^## ' + re.escape(version) + r' — (\d{4}-\d{2}-\d{2})$', changelog, re.M)
+        self.assertIsNotNone(heading)
+        guide = (ROOT/'docs/PUBLISHING.md').read_text()
+        self.assertIn(f'Version: **{version}**. Tag: **v{version}**.', guide)
+        self.assertIn(f'**{heading.group(1)}**', guide)
+        nexus_guide = (ROOT/'release/PUBLISHING_GUIDE.md').read_text()
+        self.assertIn(f'Version: **{version}**', nexus_guide)
+        self.assertEqual(fields['nexus_publishing_kit'],
+                         f'ShutUpAndLetMePlay-{version}-Nexus-Publishing-Kit.zip')
+        for key in ('main_file', 'optional_source', 'nexus_publishing_kit'):
+            self.assertIn(fields[key], nexus_guide)
+
+    def test_release_workflow_includes_nexus_kit(self):
+        workflow = (ROOT/'.github/workflows/release.yml').read_text()
+        self.assertIn('python3 tools/prepare_release.py "$TAG"', workflow)
+        for suffix in ('', '-Source', '-Nexus-Publishing-Kit'):
+            self.assertIn(f'"ShutUpAndLetMePlay-$VERSION{suffix}.zip"', workflow)
+        self.assertIn('--verify-tag --draft', workflow)
+
+    def test_prepare_release_handoff_is_complete_and_checksummed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'tools').mkdir()
+            (root/'source').mkdir()
+            (root/'dist').mkdir()
+            (root/'tools/prepare_release.py').write_bytes((ROOT/'tools/prepare_release.py').read_bytes())
+            (root/'source/Version.h').write_text('#define SULMP_VERSION "2.3.4"\n', encoding='utf-8')
+            (root/'CHANGELOG.md').write_text('## 2.3.4 — 2026-09-21\n\n- Current change.\n', encoding='utf-8')
+            assets = {
+                'ShutUpAndLetMePlay-2.3.4.zip': b'player fixture',
+                'ShutUpAndLetMePlay-2.3.4-Source.zip': b'source fixture',
+                'ShutUpAndLetMePlay-2.3.4-Nexus-Publishing-Kit.zip': b'publishing fixture',
+                'BUILD_INFO.json': b'{}\n',
+            }
+            for name, data in assets.items():
+                (root/'dist'/name).write_bytes(data)
+            result = subprocess.run([sys.executable, str(root/'tools/prepare_release.py'), 'v2.3.4'],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            out = root/'dist/release-assets'
+            self.assertEqual({p.name for p in out.iterdir()},
+                             set(assets) | {'CHECKSUMS.md', 'RELEASE_NOTES.md'})
+            for name, data in assets.items():
+                self.assertEqual((out/name).read_bytes(), data)
+            manifest = {}
+            for line in (out/'CHECKSUMS.md').read_text().splitlines():
+                digest, name = line.split('  ', 1)
+                self.assertNotIn(name, manifest)
+                manifest[name] = digest
+                self.assertEqual(digest, hashlib.sha256((out/name).read_bytes()).hexdigest())
+            self.assertEqual(set(manifest), set(assets) | {'RELEASE_NOTES.md'})
+            self.assertIn('## 2.3.4 — 2026-09-21', (out/'RELEASE_NOTES.md').read_text())
+            self.assertFalse((root/'.git').exists())
+
+    def test_prepare_release_checks_all_inputs_before_replacing_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'tools').mkdir()
+            (root/'source').mkdir()
+            out = root/'dist/release-assets'
+            out.mkdir(parents=True)
+            (out/'preserved.md').write_text('existing handoff', encoding='utf-8')
+            (root/'tools/prepare_release.py').write_bytes((ROOT/'tools/prepare_release.py').read_bytes())
+            (root/'source/Version.h').write_text('#define SULMP_VERSION "2.3.4"\n', encoding='utf-8')
+            (root/'CHANGELOG.md').write_text('## 2.3.4 — 2026-09-21\n\n- Current change.\n', encoding='utf-8')
+            for suffix in ('', '-Source'):
+                (root/'dist'/f'ShutUpAndLetMePlay-2.3.4{suffix}.zip').write_bytes(b'fixture')
+            (root/'dist/BUILD_INFO.json').write_text('{}', encoding='utf-8')
+            result = subprocess.run([sys.executable, str(root/'tools/prepare_release.py'), 'v2.3.4'],
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Missing build asset: ShutUpAndLetMePlay-2.3.4-Nexus-Publishing-Kit.zip', result.stderr)
+            self.assertEqual((out/'preserved.md').read_text(), 'existing handoff')
+            self.assertEqual({p.name for p in out.iterdir()}, {'preserved.md'})
+
     def test_package_rejects_windows_escape(self):
         with tempfile.TemporaryDirectory() as t:
             for name in ('C:/bad.md', r'..\bad.md'):

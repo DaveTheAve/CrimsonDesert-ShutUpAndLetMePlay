@@ -81,13 +81,13 @@ In other words, the mod is not inventing a new Skip button. It is standing behin
 
 ### Built to survive game updates
 
-**Shut Up & Let Me Play does not rely on fixed memory addresses or a fixed executable layout.** At startup, it pattern-scans `CrimsonDesert.exe` for the native functions it needs, resolves their current locations, and verifies the surrounding code before installing anything.
+**Shut Up & Let Me Play does not rely on fixed memory addresses or a fixed executable layout.** At startup, it pattern-scans `CrimsonDesert.exe` for the native functions it needs, resolves their current locations, and verifies the surrounding code before installing anything. Executable sections are identified by their attributes, not names that can change between builds.
 
 That means many game updates that simply move code around, change RVAs, or rearrange the executable should require **no mod update at all**. The mod finds the functions again wherever the update moved them and gets back to the important business of letting you leave the cutscene.
 
 If Pearl Abyss substantially rewrites the relevant native code, a signature becomes ambiguous, or another mod has already modified the same entry points, Shut Up & Let Me Play fails safely instead of hooking an unknown function and hoping for the best. At that point, the mod may need an update.
 
-The currently tested **`CrimsonDesert.exe` file version is `1.0.0.2944`**. That version number records what has been tested; it is **not** a hard-coded compatibility lock.
+The currently tested **`CrimsonDesert.exe` file version is `1.0.0.2949`**. That version number records what has been tested; it is **not** a hard-coded compatibility lock.
 
 Do not hot-load or hot-unload the ASI.
 
@@ -137,7 +137,7 @@ If something breaks, use the repository's bug-report form and include both files
 - the scene or NPC conversation where it happened, including any response choice
 - relevant other mods
 
-The JSON separates normal cutscene activity (`runtime`), interaction dialogue (`npc_dialogue`), and sequencer-driven dialogue (`sequencer_dialogue`). Check each dialogue section's `enabled` flag and reason separately. Choice stops, progression, and per-mode activity help identify which route was used.
+The `image_validation` section records the startup validation stage, section layout, and the specific reason for an image rejection. The JSON separates normal cutscene activity (`runtime`), interaction dialogue (`npc_dialogue`), and sequencer-driven dialogue (`sequencer_dialogue`). Check each dialogue section's `enabled` flag and reason separately. Choice stops, progression, and per-mode activity help identify which route was used.
 
 `active` means the core cutscene hooks installed successfully. It does **not** mean the diagnostic system grew eyes and personally watched your pixels.
 

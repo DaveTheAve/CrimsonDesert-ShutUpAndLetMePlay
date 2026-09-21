@@ -6,11 +6,11 @@ Project description: **An actual native Skip button for Crimson Desert cutscenes
 
 ## Release files
 
-Version: **2.0.0**. Tag: **v2.0.0**.
+Version: **2.0.1**. Tag: **v2.0.1**.
 
-Use `ShutUpAndLetMePlay-2.0.0.zip` as the player download and `ShutUpAndLetMePlay-2.0.0-Source.zip` as the optional source download. Keep the same exact player ZIP on GitHub and Nexus. The changelog records this version under **2026-09-20**.
+Use `ShutUpAndLetMePlay-2.0.1.zip` as the player download and `ShutUpAndLetMePlay-2.0.1-Source.zip` as the optional source download. Keep the same exact player ZIP on GitHub and Nexus. The changelog records this version under **2026-09-21**.
 
-`python3 tools/package_release.py` writes checksummed archives in `dist/`. The manually invoked **Prepare draft release** workflow runs from `main`, builds an existing version tag, verifies that it matches `source/Version.h`, and creates a draft for review. It neither automatically publishes nor overwrites an existing release. Build jobs have read-only permissions; the separate draft-creation job does not execute repository source.
+`bash tools/ci.sh` builds and verifies the ASI, writes the packages in `dist/`, and records `BUILD_INFO.json`. `python3 tools/prepare_release.py v2.0.1` assembles the player ZIP, Source ZIP, Nexus publishing kit, build information, release notes, and checksums in `dist/release-assets/`. Neither command uploads files or creates a release. The manually invoked **Prepare draft release** workflow runs from `main`, builds an existing version tag, verifies that it matches `source/Version.h`, and creates a draft for review. It neither automatically publishes nor overwrites an existing release. Build jobs have read-only permissions; the separate draft-creation job does not execute repository source.
 
 Generated release notes contain the matching version's changelog entry, installation links, and validation information. `BUILD_INFO.json` identifies the exact source commit, compiler, linker, and ASI checksum. Review the files and publish the draft through GitHub's release page.
 

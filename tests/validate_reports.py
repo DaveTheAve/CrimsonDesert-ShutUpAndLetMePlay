@@ -19,6 +19,10 @@ def main() -> None:
            "npc_late_change", "npc_shape", "npc_allocation", "npc_unwind", "npc_protect", "npc_flush"}
     seq = {"seq_mode0", "seq_mode2", "seq_no_actor", "seq_hidden", "seq_inactive", "seq_bad_event",
            "seq_rejected_type", "seq_paused", "seq_mode4", "seq_wrong_state", "seq_shape", "seq_callback", "seq_ambiguous"}
+    expected |= {"image_headers_unreadable", "image_code_unreadable", "image_unwind_unreadable",
+                 "image_literal_unreadable", "image_no_code", "image_text", "image_duplicate_names",
+                 "image_unusual_names", "image_split_code", "image_cross_section_ambiguity",
+                 "image_unsorted_unwind", "image_many_sections"}
     expected |= npc | seq
     assert {p.parent.name for p in reports} == expected, "Missing/unexpected diagnostic test scenarios"
     for path in reports:
@@ -34,6 +38,20 @@ def main() -> None:
                            ("safety_gate_blocks", "Safety-gate blocks")]:
             assert str(obj["runtime"][field]) == values[key]
         assert str(obj["diagnostics"]["previous_write_errors"]) == values["Previous diagnostic write errors"]
+        image = obj["image_validation"]
+        assert image["stage"] == values["Image validation stage"]
+        assert str(image["executable_section_count"]) == values["Executable sections"]
+        assert image["section_count"] == len(image["sections"])
+        if obj["status"] == "active":
+            assert image["stage"] == "ready" and image["reason"] is None
+        if path.parent.name == "image_many_sections":
+            assert image["section_count"] == 96
+        if path.parent.name == "image_text":
+            assert image["sections"][0]["name"] == ".text"
+        if path.parent.name == "image_split_code":
+            assert image["executable_section_count"] == 3
+        if path.parent.name in {"image_headers_unreadable", "image_code_unreadable", "image_unwind_unreadable", "image_unsorted_unwind", "image_no_code"}:
+            assert obj["status"] == "disabled" and image["reason"] == obj["reason"]
         dialogue = obj["npc_dialogue"]
         assert ("enabled" if dialogue["enabled"] else "disabled") == values["NPC dialogue feature"]
         for field, key in [("accepted", "NPC dialogue requests accepted"),

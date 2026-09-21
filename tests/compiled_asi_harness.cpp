@@ -27,7 +27,8 @@ static void*asiBase=nullptr;static W32(NATIVE_ABI*worker)(void*)=nullptr;
 static int(NATIVE_ABI*dllMain)(void*,W32,void*)=nullptr;
 static std::string narrow(const char16_t*p){std::string s;while(*p)s.push_back((char)*p++);return s;}
 static std::unique_ptr<Memory> loadPE(const char*path,bool reloc){
-    std::ifstream in(path,std::ios::binary);std::vector<U8>f((std::istreambuf_iterator<char>(in)),{});CHECK(f.size()>4096);
+    std::ifstream in(path,std::ios::binary|std::ios::ate);CHECK(in);auto length=in.tellg();CHECK(length>4096);
+    std::vector<U8>f((size_t)length);in.seekg(0);in.read((char*)f.data(),length);CHECK(in);
     U32 nt=u32(f.data()+0x3C),op=nt+24,n=u16(f.data()+nt+6),os=u16(f.data()+nt+20);auto m=std::make_unique<Memory>(u32(f.data()+op+56));
     std::memcpy(m->b,f.data(),4096);for(U32 i=0;i<n;++i){U8*s=f.data()+op+os+i*40;CHECK(u32(s+20)+u32(s+16)<=f.size());std::memcpy(m->b+u32(s+12),f.data()+u32(s+20),u32(s+16));}
     if(reloc){U64 preferred;std::memcpy(&preferred,m->b+op+24,8);U64 delta=(U64)m->b-preferred;U32 start=u32(m->b+op+112+40),size=u32(m->b+op+112+44),end=start+size;
@@ -76,12 +77,17 @@ static int NATIVE_ABI wProtect(void*p,W64 n,W32 value,W32*old){
     if(scenario=="npc_protect"&&!injected&&value==0x40&&same(p,DialogueUpdateBytes,15)){injected=true;return 0;}
     *old=0x20;U64 a=(U64)p&~4095ull,end=((U64)p+n+4095)&~4095ull;int prot=PROT_READ;if(value==4||value==0x40)prot|=PROT_WRITE;if(value==0x20||value==0x40)prot|=PROT_EXEC;return mprotect((void*)a,end-a,prot)==0;}
 static W64 NATIVE_ABI wQuery(const void*p,WMemory*m,W64 n){CHECK(n==48);U64 a=(U64)p;Range hit{};
+    if(scenario=="image_headers_unreadable"&&p==base)return 0;
+    if(scenario=="image_code_unreadable"&&p==base+behavior.image.sections[0].rva)return 0;
+    if(scenario=="image_unwind_unreadable"&&p==base+behavior.image.exceptionRva)return 0;
+    if(scenario=="image_literal_unreadable"&&p==base+0x5649EF8)return 0;
+
     for(auto&r:additional)if(a>=(U64)r.b&&a-(U64)r.b<r.size)hit=r;
     for(auto&r:regions)if(a>=(U64)r.first&&a-(U64)r.first<r.second)hit={(U8*)r.first,r.second};
     for(auto&r:virtualAllocations)if(a>=(U64)r.first&&a-(U64)r.first<r.second)hit={(U8*)r.first,r.second};
     if(!hit.b)return 0;*m={hit.b,hit.b,4,0,0,hit.size,0x1000,4,0x20000,0};return 48;}
 static int NATIVE_ABI wFlush(void*,const void*p,W64){++cacheCalls;if(scenario=="flush"&&!injected&&p==base+behavior.resolved.interaction){injected=true;return 0;}
-    if(scenario=="npc_flush"&&!injected&&p==base+0x1063520){injected=true;return 0;}return 1;}
+    if(scenario=="npc_flush"&&!injected&&p==base+behavior.resolved.skipSemantic-0x172){injected=true;return 0;}return 1;}
 static void* NATIVE_ABI wCurrentProcess(){return (void*)-1;}
 static W32 NATIVE_ABI wProcessId(){return 42;}
 static W32 NATIVE_ABI wThreadId(){return currentThread;}
@@ -99,7 +105,7 @@ static int NATIVE_ABI wExitCode(void*,W32*c){*c=259;return 1;}
 static U8 NATIVE_ABI wAddTable(U8*t,W32 n,U64 b){CHECK(!suspendedCount&&n==1&&u32(t)==0&&u32(t+4)==29&&u32(t+8)==32);const U8*expected=behavior.resolved.unwind;
 if(same((void*)b,DialogueInputBytes,15))expected=DialogueInputTrampolineUnwind;
 if(same((void*)b,DialogueUpdateBytes,15))expected=DialogueUpdateTrampolineUnwind;
-CHECK(std::memcmp((void*)(b+32),expected,16)==0);++unwindCalled;if(scenario=="npc_late_change"&&unwindCalled==2)base[0x1063520]=0x90;
+CHECK(std::memcmp((void*)(b+32),expected,16)==0);++unwindCalled;if(scenario=="npc_late_change"&&unwindCalled==2)base[behavior.resolved.skipSemantic-0x172]=0x90;
 if((scenario=="unwind"&&unwindCalled==2)||(scenario=="npc_unwind"&&unwindCalled==4))return 0;registeredTables[t]=true;return 1;}
 static U8 NATIVE_ABI wDeleteTable(void*t){CHECK(!suspendedCount&&registeredTables.count(t));registeredTables.erase(t);return 1;}
 static void* NATIVE_ABI wCreateFile(const char16_t*p,W32 access,W32,void*,W32 disposition,W32,void*){CHECK(!suspendedCount&&access==0x40000000&&disposition==2);if(scenario=="readonly"){lastError=5;return (void*)-1;}void*h=(void*)(U64)(1000+fileCounter++);fileHandles[h]=narrow(p);files[fileHandles[h]].clear();return h;}
@@ -138,11 +144,39 @@ int main(int argc,char**argv){try{
     put32(base+z.symbols[Sym_AppearStyle],0x4321);put32(base+z.symbols[Sym_DisappearStyle],0x4320);
     for(auto r:{std::pair<U32,U32>{z.interaction,484},{z.appearance,2178},{z.setAppearance,267},{z.symbols[Sym_ResetKeyguide],0x149},{z.symbols[Sym_AddStyle],0x99},{z.symbols[Sym_RemoveStyle],0x70}})game->executable(r.first,r.second);
     typedShowStub(*game,z.symbols[Sym_Show],(void*)mockShow);typedShowStub(*game,z.symbols[Sym_Hide],(void*)mockHide);
-    for(U32 r:{z.symbols[Sym_InvalidateStyle],z.symbols[Sym_SortStyles],z.symbols[Sym_ClearEvent],0xCB6990u,0xCC0190u,0xCC2A70u,0xCC2100u,0x3EF80B0u})stub(*game,r,(void*)noOperation);
+    for(U32 r:{z.symbols[Sym_InvalidateStyle],z.symbols[Sym_SortStyles],z.symbols[Sym_ClearEvent],referenceUi(0xCB6990u),referenceUi(0xCC0190u),referenceUi(0xCC2A70u),referenceUi(0xCC2100u),referenceUi(0x3EF80B0u)})stub(*game,r,(void*)noOperation);
     auto asi=loadPE(argv[2],true);asiBase=asi->b;linkImports(asi->b);U32 op=u32(asi->b+0x3C)+24;
     asi->executable(u32(asi->b+op+20),u32(asi->b+op+4));dllMain=(int(NATIVE_ABI*)(void*,W32,void*))(asi->b+u32(asi->b+op+16));
     if(scenario=="image")base[0]=0;
     if(scenario=="shape")base[z.appearance+100]^=1;
+    U32 peHeader=u32(base+0x3C),sectionTable=peHeader+24+u16(base+peHeader+20);
+    if(scenario=="image_text"||scenario=="image_duplicate_names"||scenario=="image_unusual_names"){
+        U8 unusual[8]={'x','"','\\',1,255,'a','b','c'};
+        U32 count=scenario=="image_text"?1:u16(base+peHeader+6);
+        for(U32 i=0;i<count;++i){U8*section=base+sectionTable+i*40;std::memset(section,0,8);
+            std::memcpy(section,scenario=="image_unusual_names"?(const void*)unusual:(const void*)".text",scenario=="image_unusual_names"?8:5);}
+    }
+    if(scenario=="image_no_code")for(U32 i=0;i<u16(base+peHeader+6);++i){U8*section=base+sectionTable+i*40;put32(section+36,u32(section+36)&~0x20000000u);}
+    if(scenario=="image_split_code"){
+        U32 count=u16(base+peHeader+6);U8*first=base+sectionTable,*extra=first+count*40;
+        CHECK(sectionTable+(count+1)*40<=u32(base+peHeader+24+60));
+        copy(extra,first,40);copy(extra,".ui-part",8);put32(extra+12,0x801000);
+        put32(extra+8,u32(first+12)+u32(first+8)-0x801000);put32(first+8,0x800000);
+        base[peHeader+6]=(U8)(count+1);base[peHeader+7]=0;
+    }
+    if(scenario=="image_cross_section_ambiguity"){
+        U32 rva=0;for(U32 i=1;i<behavior.image.sectionCount;++i)if(behavior.image.sections[i].executable()){rva=behavior.image.sections[i].rva;break;}
+        CHECK(rva&&behavior.image.code(rva,InteractionSignature.size));copy(base+rva,base+z.interaction,InteractionSignature.size);
+    }
+    if(scenario=="image_unsorted_unwind"){
+        U8 savedEntry[12];U8*entries=base+behavior.image.exceptionRva;copy(savedEntry,entries,12);copy(entries,entries+12,12);copy(entries+12,savedEntry,12);
+    }
+    if(scenario=="image_many_sections"){
+        base[peHeader+6]=96;base[peHeader+7]=0;put32(base+peHeader+24+60,0x2000);
+        for(U32 i=0;i<96;++i){U8*section=base+sectionTable+i*40;std::memset(section,0,40);
+            std::memset(section,255,8);put32(section+12,0x2000+i*4096);put32(section+8,4096);put32(section+36,0x60000020);}
+    }
+
     CHECK(dllMain(asi->b,1,nullptr)==1&&worker);CHECK(worker(nullptr)==0);CHECK(suspendedCount==0);
     CHECK(fileHandles.empty());
     if(scenario=="helper"||scenario=="duplicate"){
@@ -164,7 +198,7 @@ int main(int argc,char**argv){try{
     CHECK(log.find("Process ID: 42")!=std::string::npos);
     CHECK(report.find("last_view")==std::string::npos&&report.find("last_skip_input")==std::string::npos);
     CHECK(report.find("TestGame")==std::string::npos&&log.find("TestGame")==std::string::npos);
-    const bool succeeds=scenario=="success"||scenario=="busy"||scenario=="case"||scenario=="short"||scenario=="write"||scenario=="zero"||scenario=="rename"||scenario=="duplicate_after";
+    const bool succeeds=scenario=="success"||scenario=="busy"||scenario=="case"||scenario=="short"||scenario=="write"||scenario=="zero"||scenario=="rename"||scenario=="duplicate_after"||scenario=="image_text"||scenario=="image_duplicate_names"||scenario=="image_unusual_names"||scenario=="image_split_code";
     if(succeeds){
         CHECK(report.find("\"revision\": 2")!=std::string::npos&&log.find("Revision: 2")!=std::string::npos);
         CHECK(log.find("Status: active\n")!=std::string::npos);

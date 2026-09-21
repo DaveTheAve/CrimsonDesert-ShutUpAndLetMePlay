@@ -227,10 +227,8 @@ static DWORD __stdcall Worker(void*) {
     Sleep(1200);
     U8* b = (U8*)GetModuleHandleW(nullptr);
     const char* reason = nullptr;
-    if (!readable(b, 4096) || !parseImage(b, engine.image) ||
-        !readable(b + engine.image.codeRva, engine.image.codeSize) ||
-        !readable(b + engine.image.exceptionRva, engine.image.exceptionSize))
-        reason = "unsupported or unreadable executable image";
+    if (!loadImage(b, engine.image, readable))
+        reason = engine.image.failure;
     else if (!resolve(engine.image, engine.resolved))
         reason = engine.resolved.failure;
     if (reason) { writeSnapshot("disabled", reason); return 0; }

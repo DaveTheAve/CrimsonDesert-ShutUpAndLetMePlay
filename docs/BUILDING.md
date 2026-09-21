@@ -27,11 +27,11 @@ bash tools/ci.sh
 
 This checks the source inventory, builds twice, compares the ASIs, verifies PE
 metadata, runs Python/tooling tests, compiles five native harnesses and checks
-the generated archives. It does not execute the game or publish anything.
+the generated archives. It also executes synthetic PE/multi-section scanner tests without game files. It does not execute the game or publish anything.
 
 ## Local native execution tests
 
-Use Linux x86-64, g++, Python and your own exact reference executable:
+Use Linux x86-64, g++, Python and your own exact reference executable listed in `tests/reference.json`:
 
 ```bash
 bash tests/run_tests.sh "/outside/the/source/CrimsonDesert.exe"
@@ -39,7 +39,7 @@ bash tests/run_tests.sh "/outside/the/source/CrimsonDesert.exe"
 
 The script verifies the executable hash before executing isolated reviewed
 routines. It never calls the game's entry point. Reference file version:
-**1.0.0.2944**. Reference SHA-256:
+**1.0.0.2944** or **1.0.0.2949**. The original reference SHA-256 is:
 
 `6d348be9d52f81bd35cf7c55e73a5dbfc96cc8268438387c91f7f62c82381fa7`
 
@@ -52,7 +52,7 @@ choice rendering, audio and gameplay-event recipients.
 
 ## Source layout
 
-`Behavior.h`, `Resolver.h` and `VerifiedSignatures.h` implement the normal
+`Image.h` handles bounded PE parsing, executable-section discovery, and read-access validation without matching section names. `Behavior.h`, `Resolver.h` and `VerifiedSignatures.h` implement the normal
 cutscene path. `Dialogue.h`, `DialogueResolver.h` and `DialogueSignatures.h`
 implement interaction-dialogue offers, bounded progression and native choice
 boundaries. `Sequencer.h` and `SequencerSignatures.h` add the distinct native
