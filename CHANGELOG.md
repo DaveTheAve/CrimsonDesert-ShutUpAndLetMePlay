@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.2 — 2026-11-01
+
+- Updated for game version 1.0.0.3479.
+
 ## 2.0.1 — 2026-09-21
 
 - Restores compatibility with executable file version 1.0.0.2949.

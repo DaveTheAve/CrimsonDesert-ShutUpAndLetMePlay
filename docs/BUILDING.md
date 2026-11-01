@@ -75,3 +75,13 @@ python3 tools/package_release.py
 
 This creates player, source, repository, and Nexus-publishing archives with checksums in `dist/`. It has no upload or publication step. Only the ASI from the player
 ZIP goes into the game directory.
+
+## Updated 1.0.0.3479 compatibility regression
+
+The optional reference-dependent tests use a user-supplied unmodified executable, without distributing game bytes:
+
+```bash
+bash tests/run_tests.sh "/path/to/updated/CrimsonDesert.exe"
+```
+
+For 1.0.0.3479, this runs the compiled-ASI native hook and dialogue isolation checks. The older two references run their original native/compiled fixture suite. Both paths are offline; no game window is launched.

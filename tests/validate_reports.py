@@ -9,9 +9,11 @@ from pathlib import Path
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
+    parser.add_argument("--updated", action="store_true", help="Validate the 1.0.0.3479 native keyguide scenarios")
     args = parser.parse_args()
     header = (Path(__file__).resolve().parent.parent / "source/Version.h").read_text()
     version = re.search(r'#define\s+SULMP_VERSION\s+"([0-9.]+)"', header).group(1)
+    build_id = re.search(r'#define\s+SULMP_BUILD_ID\s+"([^"\n]+)"', header).group(1)
     reports = sorted(args.directory.glob("*/report.json"))
     expected = {"success", "busy", "allocation", "unwind", "protect", "suspend", "context", "flush",
                 "duplicate_after", "case", "mutex", "pin", "image", "shape", "short", "write", "zero", "rename"}
@@ -24,12 +26,27 @@ def main() -> None:
                  "image_unusual_names", "image_split_code", "image_cross_section_ambiguity",
                  "image_unsorted_unwind", "image_many_sections"}
     expected |= npc | seq
+    if args.updated:
+        expected = {"new_success", "new_shape", "new_ambiguous", "allocation", "unwind", "new_input_changed",
+                    "new_binding_shape", "new_binding_link", "new_binding_ambiguous", "new_cache_shape",
+                    "new_binding_unwind", "new_bad_action", "new_null_action", "new_unreadable_action",
+                    "new_neighbor_action", "new_bad_guide_type", "new_style_guard", "new_pause_hidden"}
     assert {p.parent.name for p in reports} == expected, "Missing/unexpected diagnostic test scenarios"
     for path in reports:
         obj = json.loads(path.read_text(encoding="utf-8"))
         text = (path.parent / "report.log").read_text(encoding="utf-8")
         values = dict(line.split(": ", 1) for line in text.splitlines() if ": " in line)
         assert obj["version"] == version and obj["schema_version"] == 1
+        assert obj["build_id"] == values["Build ID"] == build_id
+        assert obj["resolver"]["keyguide_action_offset"] == int(values["Keyguide action offset"], 0)
+        for field, key in [("appearance_view_blocks", "Appearance view gate blocks"),
+                           ("appearance_style_blocks", "Appearance style gate blocks"),
+                           ("last_cutscene_gate_code", "Last view gate code"),
+                           ("last_cutscene_guide_failure", "Last guide failure code"),
+                           ("last_cutscene_guide_role", "Last guide role")]:
+            assert str(obj["runtime"][field]) == values[key], (path.parent.name, field)
+        observed = obj["runtime"]["last_cutscene_observed_action_hash"]
+        assert type(observed) is int and 0 <= observed <= 0xFFFFFFFF
         for field, key in [("session_id", "Session"), ("process_id", "Process ID"),
                            ("revision", "Revision"), ("status", "Status"), ("reason", "Reason")]:
             assert str(obj[field]) == values[key], (path.parent.name, field)
@@ -75,6 +92,45 @@ def main() -> None:
         assert sequence["prompt_repairs"] == sequence["mode_0_prompt_repairs"] + sequence["mode_2_prompt_repairs"]
         assert sequence["native_style_state_verified"] <= sequence["prompt_repairs"]
         assert "last_view" not in obj["runtime"] and "last_skip_input" not in obj["runtime"]
+    if args.updated:
+        checks = {p.parent.name: json.loads(p.read_text()) for p in reports}
+        active = {"new_success", "new_bad_action", "new_null_action", "new_unreadable_action",
+                  "new_neighbor_action", "new_bad_guide_type", "new_style_guard", "new_pause_hidden"}
+        for name, obj in checks.items():
+            run = obj["runtime"]
+            if name not in active:
+                assert obj["status"] == "disabled" and run["appearance_repairs"] == 0
+                assert run["interaction_calls"] == run["appearance_calls"] == 0
+                continue
+            assert obj["status"] == "active"
+            assert obj["npc_dialogue"]["enabled"] == obj["sequencer_dialogue"]["enabled"] == 1
+            assert obj["resolver"]["native_profile"] == 1
+            assert [obj["resolver"][k] for k in ("keyguide_action_offset", "keyguide_family_offset", "keyguide_subtype_offset")] == [0x1E8, 0x1F0, 0x1F1]
+            if name == "new_success":
+                assert run["appearance_repairs"] == run["native_style_state_verified"] == 51
+                assert run["preactivation_unlocks"] == run["initial_input_shows"] == run["interaction_disable_cleanup"] == 51
+                assert run["appearance_view_blocks"] == run["safety_gate_blocks"] == 1
+                assert run["appearance_style_blocks"] == 0 and run["last_cutscene_gate_code"] == 7
+                assert (run["last_input_family"], run["last_input_subtype"]) == (1, 2)
+                sequence = obj["sequencer_dialogue"]
+                assert sequence["mode_0_prompt_repairs"] == sequence["mode_2_prompt_repairs"] == 1
+                assert sequence["prompt_repairs"] == sequence["native_style_state_verified"] == 2
+            elif name == "new_pause_hidden":
+                assert run["appearance_repairs"] == run["native_style_state_verified"] == 1
+                assert run["safety_gate_blocks"] == 0
+            else:
+                assert run["appearance_repairs"] == run["native_style_state_verified"] == 0
+                assert run["safety_gate_blocks"] == 1
+                style = name == "new_style_guard"
+                assert run["appearance_view_blocks"] == (0 if style else 1)
+                assert run["appearance_style_blocks"] == (1 if style else 0)
+                if name in {"new_bad_action", "new_neighbor_action"}:
+                    assert run["last_cutscene_guide_failure"] == 4
+                if name in {"new_null_action", "new_unreadable_action"}:
+                    assert run["last_cutscene_guide_failure"] == 3
+            assert obj["npc_dialogue"]["accepted"] == 0
+        print(f"PASS {len(reports)} updated-executable JSON/log pairs; build ID, layout, identity guards, native repairs and fail-closed results verified")
+        return
     results = {p.parent.name: json.loads(p.read_text())["npc_dialogue"] for p in reports if p.parent.name in npc}
     for name in ("npc_success", "npc_events", "npc_budget"):
         d = results[name]

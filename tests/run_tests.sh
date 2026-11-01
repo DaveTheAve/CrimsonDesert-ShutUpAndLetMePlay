@@ -14,7 +14,7 @@ fi
 command -v python3 >/dev/null || { printf 'Python 3 is required.\n' >&2; exit 2; }
 command -v g++ >/dev/null || { printf 'g++ is required.\n' >&2; exit 2; }
 [[ -f "$ROOT/ShutUpAndLetMePlay.asi" ]] || { printf 'Build the ASI first.\n' >&2; exit 2; }
-python3 - "$ROOT/tests/reference.json" "$1" <<'PYREF'
+PROFILE="$(python3 - "$ROOT/tests/reference.json" "$1" <<'PYREF'
 import hashlib, json, pathlib, sys
 reference = json.loads(pathlib.Path(sys.argv[1]).read_text())
 known = [reference] + reference.get('additional_references', [])
@@ -25,10 +25,22 @@ with open(sys.argv[2], 'rb') as executable:
 matches = [r for r in known if r['executable_sha256'] == digest.hexdigest()]
 if len(matches) != 1:
     raise SystemExit('Isolation tests require an exact executable listed in tests/reference.json.')
-print('Verified isolation-test reference:', matches[0]['file_version'], digest.hexdigest())
+print(matches[0].get('profile','original'))
 PYREF
+)"
+printf 'Verified isolation-test reference: %s\n' "$PROFILE"
 BUILD="$(mktemp -d)"
 trap 'rm -rf -- "$BUILD"' EXIT
+if [[ "$PROFILE" == "refactored" ]]; then
+  g++ -std=c++17 -O2 -Wall -Wextra -Werror -Wno-misleading-indentation -Wno-unused-function \
+    "$ROOT/tests/updated_compiled_harness.cpp" -o "$BUILD/updated_compiled_harness"
+  for scenario in new_success new_shape new_ambiguous allocation unwind new_input_changed new_binding_shape new_binding_link new_binding_ambiguous new_cache_shape new_binding_unwind new_bad_action new_null_action new_unreadable_action new_neighbor_action new_bad_guide_type new_style_guard new_pause_hidden; do
+    "$BUILD/updated_compiled_harness" "$1" "$ROOT/ShutUpAndLetMePlay.asi" "$scenario" "$BUILD/reports"
+  done
+  python3 "$ROOT/tests/validate_reports.py" "$BUILD/reports" --updated
+  printf 'PASS updated native image and compiled-ASI isolation; no full game launched.\n'
+  exit 0
+fi
 CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -Werror -Wno-misleading-indentation -Wno-unused-function)
 g++ "${CXXFLAGS[@]}" "$ROOT/tests/native_harness.cpp" -o "$BUILD/native_harness"
 g++ "${CXXFLAGS[@]}" "$ROOT/tests/compiled_asi_harness.cpp" -o "$BUILD/compiled_asi_harness"

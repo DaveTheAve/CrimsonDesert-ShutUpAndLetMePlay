@@ -55,7 +55,7 @@ struct Dialogue {
     void*gameState()const {
         void*g=ptr(core->image.base+resolved.symbols[DialogueSymWorld],0);
         if(!ok(g,0x28))return nullptr;void*s=ptr(g,0x20);
-        if(!ok(s,0x11D8))return nullptr;
+        if(!ok(s,core->resolved.profile==1?0x1230u:0x11D8u))return nullptr;
         void*m=ptr(core->image.base+core->resolved.symbols[Sym_GameManager],0);
         if(!ok(m,0x98)||ptr(m,0x90)!=s)return nullptr;
         return s;
@@ -68,10 +68,11 @@ struct Dialogue {
         U32 id=u32((U8*)ctx+4),index=u32((U8*)ctx+8),count=u32((U8*)store+8);
         if(count>1000000||id>=count||index>65535)return nullptr;
         void**cache=(void**)ptr(store,0x58);
-        if(!ok(cache,count*8)||!ok(cache[id],0x130))return nullptr;
-        void*database=cache[id];U32 rows=u32((U8*)database+0x128);
+        U32 rowOffset=core->resolved.profile==1?0x110u:0x120u;
+        if(!ok(cache,count*8)||!ok(cache[id],rowOffset+16))return nullptr;
+        void*database=cache[id];U32 rows=u32((U8*)database+rowOffset+8);
         if(!rows||rows>65536||index>=rows)return nullptr;
-        U8*data=(U8*)ptr(database,0x120);
+        U8*data=(U8*)ptr(database,rowOffset);
         if(!ok(data,rows*0x90))return nullptr;return data+index*0x90;
     }
     bool vectorReadable(const void*owner,U32 offset,U32 stride,U32 limit=65536)const {
@@ -208,7 +209,7 @@ struct Dialogue {
         }
         if(running){
             reason(DProcessing);
-            void*state=gameState();void*manager=state?ptr(state,0x11D0):nullptr;
+            void*state=gameState();void*manager=state?ptr(state,core->resolved.profile==1?0x1228u:0x11D0u):nullptr;
             if(!ok(manager,8)||!ok(result,4)){running=false;count(counters.guards);reason(DGuard);}
             else {
                 U8*c=(U8*)ctx;U32 voice=u32(c+0x50);

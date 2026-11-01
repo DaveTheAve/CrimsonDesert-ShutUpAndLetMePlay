@@ -134,6 +134,14 @@ class ReleaseToolsTests(unittest.TestCase):
         entries = re.findall(r'^## ([0-9.]+) — (\d{4}-\d{2}-\d{2})$', changelog, re.M)
         self.assertEqual(entries[0][0], version)
         self.assertEqual(date.fromisoformat(entries[0][1]), date(*STAMP[:3]))
+    def test_version_202_has_only_approved_changelog_line(self):
+        text = (ROOT/'CHANGELOG.md').read_text()
+        section = text.split('## 2.0.2 — 2026-11-01\n', 1)[1].split('## 2.0.1', 1)[0]
+        self.assertEqual(section.strip(), '- Updated for game version 1.0.0.3479.')
+        notes = release_notes(ROOT, '2.0.2')
+        self.assertIn('- Updated for game version 1.0.0.3479.', notes)
+        self.assertNotIn('Adapts the native Skip hooks', notes)
+
     def test_release_notes_use_current_changelog(self):
         version = json.loads((ROOT/'release/NEXUS_FIELDS.json').read_text())['version']
         notes = release_notes(ROOT, version)

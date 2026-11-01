@@ -56,7 +56,7 @@ static void absoluteJump(U8*where,void*target){
 }
 struct Hook {
     U8*target=nullptr,*allocation=nullptr;RuntimeFunction*table=nullptr;
-    U8 original[15]{},replacement[15]{};DWORD oldProtect=0;
+    U8 original[17]{},replacement[17]{};U8 length=15;DWORD oldProtect=0;
     bool protectedPage=false,registered=false;
 };
 static Hook cutsceneHooks[2],dialogueHooks[2];
@@ -95,40 +95,77 @@ static bool freezeThreads(bool&busy){
         t.suspended=true;
         ThreadContext context{};context.flags=0x100001;
         if(!GetThreadContext(t.handle,&context)){installFailure="thread context read failed";return false;}
-        for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)if(context.rip>=(U64)h.target&&context.rip<(U64)h.target+15){busy=true;return false;}
+        for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)if(context.rip>=(U64)h.target&&context.rip<(U64)h.target+h.length){busy=true;return false;}
     }return true;
 }
 static void restoreProtections(){
     // Reverse order also handles both entries sharing a memory page.
     for(unsigned i=2;i>0;--i){auto&h=hooks[i-1];if(h.protectedPage){DWORD ignored=0;
-        if(!VirtualProtect(h.target,15,h.oldProtect,&ignored))protectionWarning=true;h.protectedPage=false;}}
+        if(!VirtualProtect(h.target,h.length,h.oldProtect,&ignored))protectionWarning=true;h.protectedPage=false;}}
 }
 static void discardHooks(){
     restoreProtections();
     for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true){if(h.registered){RtlDeleteFunctionTable(h.table);h.registered=false;}if(h.allocation)VirtualFree(h.allocation,0,0x8000);h=Hook{};}
 }
-static bool prepareHook(Hook&h,U32 r,void*entry,const U8*unwind,const U8*expected){
-    h.target=engine.image.base+r;
-    if(!readable(h.target,15)||!same(h.target,expected,15)){
+static bool prepareHook(Hook&h,U32 r,void*entry,const U8*unwind,const U8*expected,U8 length=15){
+    h.target=engine.image.base+r;h.length=length;
+    if((length!=15&&length!=17)||!readable(h.target,length)||!same(h.target,expected,length)){
         installFailure="native entry changed between validation and installation";return false;
     }
-    copy(h.original,h.target,15);
-    h.allocation=(U8*)VirtualAlloc(nullptr,4096,0x3000,4);if(!h.allocation){installFailure="trampoline allocation failed";return false;}
-    copy(h.allocation,h.original,15);absoluteJump(h.allocation+15,h.target+15);
-    copy(h.allocation+32,unwind,16);h.table=(RuntimeFunction*)(h.allocation+64);*h.table={0,29,32};
-    // Proper x64 unwind info for the exact copied prologue; no stolen relative instructions.
-    if(!RtlAddFunctionTable(h.table,1,(U64)h.allocation)){installFailure="trampoline unwind registration failed";return false;}h.registered=true;
-    DWORD old=0;if(!VirtualProtect(h.allocation,4096,0x20,&old)||!FlushInstructionCache(GetCurrentProcess(),h.allocation,29)){
-        installFailure="trampoline protection or instruction-cache flush failed";return false;}
-    absoluteJump(h.replacement,entry);h.replacement[14]=0x90;return true;
+    copy(h.original,h.target,length);
+    h.allocation=(U8*)VirtualAlloc(nullptr,4096,0x3000,4);
+    if(!h.allocation){installFailure="trampoline allocation failed";return false;}
+    U32 codeSize=29;
+    if(length==17){
+        // Refactored appearance starts with push rbx, sub rsp, test dl,dl,
+        // JE rel32. Relocate the conditional branch as JNE followed by two
+        // position-independent absolute jumps; neither branch loses its target.
+        if(!same(h.original,(const U8*)"\x40\x53\x48\x83\xEC\x20\x48\x8B\xD9\x84\xD2\x0F\x84",13)){
+            installFailure="unsupported conditional appearance entry";return false;
+        }
+        U64 taken=(U64)h.target+17+(I32)u32(h.original+13);
+        U64 resume=(U64)h.target+17;
+        copy(h.allocation,h.original,11);
+        h.allocation[11]=0x75;h.allocation[12]=14; // JNE to resume jump
+        absoluteJump(h.allocation+13,(void*)taken);
+        absoluteJump(h.allocation+27,(void*)resume);
+        copy(h.allocation+64,unwind,8);
+        h.table=(RuntimeFunction*)(h.allocation+128);
+        *h.table={0,41,64};codeSize=41;
+    }else{
+        copy(h.allocation,h.original,15);
+        absoluteJump(h.allocation+15,h.target+15);
+        copy(h.allocation+32,unwind,16);
+        h.table=(RuntimeFunction*)(h.allocation+64);
+        *h.table={0,29,32};
+    }
+    if(!RtlAddFunctionTable(h.table,1,(U64)h.allocation)){
+        installFailure="trampoline unwind registration failed";return false;
+    }
+    h.registered=true;
+    DWORD old=0;
+    if(!VirtualProtect(h.allocation,4096,0x20,&old)||
+       !FlushInstructionCache(GetCurrentProcess(),h.allocation,codeSize)){
+        installFailure="trampoline protection or instruction-cache flush failed";return false;
+    }
+    absoluteJump(h.replacement,entry);
+    for(U32 i=14;i<length;++i)h.replacement[i]=0x90;
+    return true;
 }
 static bool installHooks(bool npc=false){
     hooks=npc?dialogueHooks:cutsceneHooks;
+    const bool current=engine.resolved.profile==1;
     bool prepared=npc?
-        (prepareHook(hooks[0],dialogue.resolved.input,(void*)&DialogueInputEntry,DialogueInputTrampolineUnwind,DialogueInputBytes)&&
-         prepareHook(hooks[1],dialogue.resolved.update,(void*)&DialogueUpdateEntry,DialogueUpdateTrampolineUnwind,DialogueUpdateBytes)):
-        (prepareHook(hooks[0],engine.resolved.interaction,(void*)&InteractionEntry,engine.resolved.unwind,InteractionBytes)&&
-         prepareHook(hooks[1],engine.resolved.appearance,(void*)&AppearanceEntry,engine.resolved.unwind,CinemaAppearanceBytes));
+        (prepareHook(hooks[0],dialogue.resolved.input,(void*)&DialogueInputEntry,
+                     current?NewInputTrampolineUnwind:DialogueInputTrampolineUnwind,current?NewInputBytes:DialogueInputBytes)&&
+         prepareHook(hooks[1],dialogue.resolved.update,(void*)&DialogueUpdateEntry,
+                     current?NewUpdateTrampolineUnwind:DialogueUpdateTrampolineUnwind,
+                     current?NewUpdateBytes:DialogueUpdateBytes)):
+        (prepareHook(hooks[0],engine.resolved.interaction,(void*)&InteractionEntry,
+                     engine.resolved.unwind,current?NewInteractionBytes:InteractionBytes)&&
+         prepareHook(hooks[1],engine.resolved.appearance,(void*)&AppearanceEntry,
+                     current?engine.resolved.appearanceUnwind:engine.resolved.unwind,
+                     current?NewAppearanceBytes:CinemaAppearanceBytes,current?17:15));
     if(!prepared){discardHooks();return false;}
     // Publish originals before either entry is modified, for both hook pairs.
     if(npc){dialogue.originalInput=(DialogueInput)hooks[0].allocation;dialogue.originalUpdate=(DialogueUpdate)hooks[1].allocation;}
@@ -137,16 +174,16 @@ static bool installHooks(bool npc=false){
     for(unsigned attempt=0;attempt<40&&!installed;++attempt){
         installFailure=nullptr;
         if(!enumerateThreads())break;
-        bool pages=true;for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true){if(!VirtualProtect(h.target,15,0x40,&h.oldProtect)){pages=false;installFailure="cannot protect native entry";break;}h.protectedPage=true;}
+        bool pages=true;for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true){if(!VirtualProtect(h.target,h.length,0x40,&h.oldProtect)){pages=false;installFailure="cannot protect native entry";break;}h.protectedPage=true;}
         if(!pages){releaseThreads();restoreProtections();break;}
         bool busy=false;
         if(!freezeThreads(busy)){releaseThreads();restoreProtections();if(busy){Sleep(25);continue;}break;}
-        bool clean=true;for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)clean=clean&&same(h.target,h.original,15);
+        bool clean=true;for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)clean=clean&&same(h.target,h.original,h.length);
         if(clean){
-            for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)copy(h.target,h.replacement,15);
-            bool flush=true;for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)flush=FlushInstructionCache(GetCurrentProcess(),h.target,15)&&flush;
+            for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)copy(h.target,h.replacement,h.length);
+            bool flush=true;for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)flush=FlushInstructionCache(GetCurrentProcess(),h.target,h.length)&&flush;
             if(flush){installed=true;}
-            else{for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)copy(h.target,h.original,15);for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)FlushInstructionCache(GetCurrentProcess(),h.target,15);installFailure="entry cache flush failed; original entry bytes restored";}
+            else{for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)copy(h.target,h.original,h.length);for(U32 hi=0;hi<2;++hi)if(auto&h=hooks[hi];true)FlushInstructionCache(GetCurrentProcess(),h.target,h.length);installFailure="entry cache flush failed; original entry bytes restored";}
         }else installFailure="another modification changed a native entry before installation";
         // Instruction pointers inside either replaced prologue cause retry,
         // rather than relocating a live thread context or risking half a jump.
@@ -229,7 +266,8 @@ static DWORD __stdcall Worker(void*) {
     const char* reason = nullptr;
     if (!loadImage(b, engine.image, readable))
         reason = engine.image.failure;
-    else if (!resolve(engine.image, engine.resolved))
+    else if (!resolve(engine.image, engine.resolved) &&
+             !resolve3479(engine.image, engine.resolved))
         reason = engine.resolved.failure;
     if (reason) { writeSnapshot("disabled", reason); return 0; }
 
@@ -244,8 +282,12 @@ static DWORD __stdcall Worker(void*) {
     engine.setAppearance = (Toggle)(b + engine.resolved.setAppearance);
     dialogue.core=&engine;dialogue.clock=monotonicMilliseconds;sequencer.dialogue=&dialogue;
     // Scan before changing any native entry; validation never scans our own detours.
-    const bool npcResolved=resolveDialogue(engine.image,engine.resolved,dialogue.resolved);
-    resolveSequencer(engine.image,dialogue.resolved,sequencer.resolved);
+    const bool npcResolved=engine.resolved.profile==1?
+        resolveDialogue3479(engine.image,engine.resolved,dialogue.resolved):
+        resolveDialogue(engine.image,engine.resolved,dialogue.resolved);
+    if(engine.resolved.profile==1)
+        resolveSequencer3479(engine.image,dialogue.resolved,sequencer.resolved);
+    else resolveSequencer(engine.image,dialogue.resolved,sequencer.resolved);
     if (!installHooks()) { writeSnapshot("disabled", installFailure); return 0; }
     if(npcResolved){
         dialogue.advance=(DialogueAdvance)(b+dialogue.resolved.advance);

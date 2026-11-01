@@ -14,6 +14,8 @@ struct RootState { I32 appear=-1,disappear=-1; };
 struct Observation {
     U32 interactionCalls=0,appearanceCalls=0,preUnlocks=0,inputShows=0,appearanceRepairs=0,appearanceVerified=0,blocks=0,cleanupCalls=0;
     U32 lastMode=255,lastInputFamily=255,lastInputSubtype=255;
+    U32 appearanceViewBlocks=0,appearanceStyleBlocks=0,lastViewFailure=0;
+    U32 lastGuideFailure=0,lastGuideRole=0,lastActionHash=0;
     I32 lastAppearBefore=-1,lastDisappearBefore=-1,lastAppearAfter=-1,lastDisappearAfter=-1;
     U64 lastView=0,lastInput=0;
 };
@@ -28,27 +30,57 @@ struct Behavior {
     void*ptr(const void*p,U32 o)const{return *(void*const*)((const U8*)p+o);}
     U8 mode()const{
         const void*g=image.base+resolved.symbols[Sym_GameManager];if(!ok(g,8))return 255;
-        void*m=ptr(g,0);if(!ok(m,0x98))return 255;void*s=ptr(m,0x90);if(!ok(s,0x107F))return 255;
-        return ((const U8*)s)[0x107E];
+        void*m=ptr(g,0);if(!ok(m,0x98))return 255;void*s=ptr(m,0x90);U32 modeOffset=resolved.profile==1?0x10B6u:0x107Eu;
+        if(!ok(s,modeOffset+1))return 255;
+        return ((const U8*)s)[modeOffset];
     }
     bool widget(void*w)const{
         if(!ok(w,0xC0))return false;
         const void*vt=ptr(w,0);if(!image.pointer(vt,8))return false;
         return ok(ptr(w,8),0xA8);
     }
-    bool guide(void*g,U32 hash)const{
-        if(!widget(g)||!ok(g,0x248))return false;
-        void*a=ptr(g,0x1F8);return ok(a,0x30)&&u32((U8*)a+0x2C)==hash;
+    // Codes: 1 invalid widget, 2 unreadable binding/cache fields,
+    // 3 unreadable action, 4 wrong action identity. Never try an old slot as a
+    // fallback: its unrelated contents can be a readable but incorrect pointer.
+    U32 guideFailure(void*g,U32 hash,U32*observedHash=nullptr)const{
+        if(observedHash)*observedHash=0;
+        if(!widget(g))return 1;
+        if(!ok(g,resolved.guideSubtypeOffset+1))return 2;
+        void*a=ptr(g,resolved.guideActionOffset);
+        if(!ok(a,0x30))return 3;
+        U32 actual=u32((U8*)a+0x2C);
+        if(observedHash)*observedHash=actual;
+        return actual==hash?0:4;
+    }
+    bool guide(void*g,U32 hash)const{return guideFailure(g,hash)==0;}
+    // Fast Forward is the live-row anchor. Pause visibility may change
+    // independently and is not required for restoring Skip. Pause's object
+    // identity and type still have to match the native row.
+    // Failure codes are numeric and safe to report without game pointers.
+    U32 viewFailure(void*self,void*&w,void*&g,bool requireRow,Observation*out=nullptr)const{
+        if(out){out->lastGuideFailure=0;out->lastGuideRole=0;out->lastActionHash=0;}
+        w=nullptr;g=nullptr;
+        if(!ok(self,0x308))return 1;
+        w=ptr(self,0x2E8);g=ptr(self,0x2F0);
+        if(!widget(w))return 2;
+        U32 hash=0,why=guideFailure(g,0x8653EBE6u,&hash);
+        if(why){if(out){out->lastGuideFailure=why;out->lastGuideRole=1;out->lastActionHash=hash;}return 3;}
+        void*ff=ptr(self,0x2E0),*pause=ptr(self,0x300);
+        why=guideFailure(ff,0x5EFE1F8Eu,&hash);
+        if(why){if(out){out->lastGuideFailure=why;out->lastGuideRole=2;out->lastActionHash=hash;}return 4;}
+        why=guideFailure(pause,0xED9DCCC4u,&hash);
+        if(why){if(out){out->lastGuideFailure=why;out->lastGuideRole=3;out->lastActionHash=hash;}return 4;}
+        if(ff==g||pause==g||ff==pause)return 4;
+        if(ptr(ff,0)!=ptr(g,0)||ptr(g,0)!=ptr(pause,0))return 5;
+        void*fw=ptr(self,0x2D8),*pw=ptr(self,0x2F8);
+        if(!widget(fw)||!widget(pw)||ptr(w,0)!=ptr(fw,0)||ptr(w,0)!=ptr(pw,0))return 6;
+        // Only Fast Forward must be shown. A hidden Pause wrapper does not
+        // imply that the rest of the cinematic row is unavailable.
+        if(requireRow&&((U8*)fw)[0xBE]!=0)return 7;
+        return 0;
     }
     bool views(void*self,void*&w,void*&g,bool requireRow)const{
-        if(!ok(self,0x308))return false;w=ptr(self,0x2E8);g=ptr(self,0x2F0);
-        if(!widget(w)||!guide(g,0x8653EBE6u))return false;
-        void*ff=ptr(self,0x2E0),*pause=ptr(self,0x300);
-        if(!guide(ff,0x5EFE1F8Eu)||!guide(pause,0xED9DCCC4u)||ff==g||pause==g||ff==pause)return false;
-        if(ptr(ff,0)!=ptr(g,0)||ptr(g,0)!=ptr(pause,0))return false;
-        void*fw=ptr(self,0x2D8),*pw=ptr(self,0x2F8);
-        if(!widget(fw)||!widget(pw)||ptr(w,0)!=ptr(fw,0)||ptr(w,0)!=ptr(pw,0))return false;
-        return !requireRow||(((U8*)fw)[0xBE]==0&&((U8*)pw)[0xBE]==0);
+        return viewFailure(self,w,g,requireRow)==0;
     }
     // The actual style vector is guide+8 -> backing+20 -> controller+8.
     // It contains 32-bit interned style IDs; it is NOT a child widget.
@@ -88,7 +120,10 @@ struct Behavior {
         // Native appearance(false) and every non-gameplay mode stay native.
         if(!enabled||m!=1)return;
         void*w=nullptr,*g=nullptr;RootState before;
-        if(!views(self,w,g,true)||!root(g,before)){++stats.blocks;return;}
+        U32 issue=viewFailure(self,w,g,true,&stats);
+        stats.lastViewFailure=issue;
+        if(issue){++stats.blocks;++stats.appearanceViewBlocks;return;}
+        if(!root(g,before)){++stats.blocks;++stats.appearanceStyleBlocks;return;}
         // A preceding native hide update can close the wrapper, independently
         // of the root's appear/disappear styles. Restore BOTH layers here.
         show(w);show(g);setAppearance(g,1);++stats.appearanceRepairs;
@@ -97,7 +132,8 @@ struct Behavior {
         stats.lastAppearBefore=before.appear;stats.lastDisappearBefore=before.disappear;
         stats.lastAppearAfter=after.appear;stats.lastDisappearAfter=after.disappear;
         stats.lastView=(U64)self;stats.lastInput=(U64)g;
-        stats.lastInputFamily=((U8*)g)[0x200];stats.lastInputSubtype=((U8*)g)[0x201];
+        stats.lastInputFamily=((U8*)g)[resolved.guideFamilyOffset];
+        stats.lastInputSubtype=((U8*)g)[resolved.guideSubtypeOffset];
     }
 };
 }

@@ -24,6 +24,7 @@ g++ "${CXXFLAGS[@]}" tests/compiled_asi_harness.cpp -o .build/compiled_asi_harne
 g++ "${CXXFLAGS[@]}" tests/dialogue_harness.cpp -o .build/dialogue_harness
 g++ "${CXXFLAGS[@]}" tests/dialogue_compiled_harness.cpp -o .build/dialogue_compiled_harness
 g++ "${CXXFLAGS[@]}" tests/sequencer_compiled_harness.cpp -o .build/sequencer_compiled_harness
+g++ "${CXXFLAGS[@]}" tests/updated_compiled_harness.cpp -o .build/updated_compiled_harness
 python3 tools/package_release.py
 python3 - <<'PY'
 import hashlib, json, pathlib, re, subprocess

@@ -133,6 +133,85 @@
           "sha256": "34344cb600ceda000889d266dd31351d123c0e949bf119760e578fefb5874427"
         }
       }
+    },
+    {
+      "file_version": "1.0.0.3479",
+      "executable_sha256": "df531a585bf84ceb47779304cc8b3caaf976aea88424c32605885623cd4519c7",
+      "timestamp": "0x6ae6e3e8",
+      "image_size": "0x14073000",
+      "profile": "refactored",
+      "functions": {
+        "Interaction": {
+          "rva": "0x12145e0",
+          "length": 506,
+          "sha256": "e1c221085f3d35ca95d0fe8068d7c8d6ab8d91a01211c8b27e5819813e837b04"
+        },
+        "Appearance": {
+          "rva": "0x1214370",
+          "length": 617,
+          "sha256": "41ed5ee34d1ffcc63106a902f807527d07e5db24dae4bdf2213215e414843569"
+        },
+        "SetAppearance": {
+          "rva": "0xe41140",
+          "length": 459,
+          "sha256": "af18271ba786d9673873a463f8ac08cd8b53264b39e9ec1372057ad3a863bec1"
+        },
+        "Input": {
+          "rva": "0x120edb0",
+          "length": 2787,
+          "sha256": "b7fa721ac01e7f2e50d5dbfa860526f46cd2810f3cee928b71052ba779c4258f"
+        },
+        "Update": {
+          "rva": "0x6725b0",
+          "length": 2332,
+          "sha256": "54f15482aae7a657ac63781f4d2c75741481dfa994645874871a6febe390b13f"
+        },
+        "Advance": {
+          "rva": "0x670120",
+          "length": 4781,
+          "sha256": "80cd859066b8ba84610cced18da41d1cf46ad35e20a765c6dd8f5ec78864c106"
+        },
+        "Current": {
+          "rva": "0x672490",
+          "length": 285,
+          "sha256": "025203b42b783d862b63abe0cc1b05800d64249a059f976d0a8995c42edc5cae"
+        },
+        "Finish": {
+          "rva": "0x671420",
+          "length": 884,
+          "sha256": "b0a646b25d8b05b323534cb4fba8b2f940c9448cb6945dcf0206f73b1c5e8ff9"
+        },
+        "Database": {
+          "rva": "0x67f330",
+          "length": 394,
+          "sha256": "007071977339cd87574cfdb520efbd100f25b00f49c4a37f252321111279d5ed"
+        },
+        "SequenceSkip": {
+          "rva": "0xba3310",
+          "length": 705,
+          "sha256": "2edb10778e0b72976711bddf42ae76afe73ea03d1e29ced782e738bf294bc213"
+        },
+        "SequenceFinish": {
+          "rva": "0xba35e0",
+          "length": 808,
+          "sha256": "6f775ccb6a46556e1dbdfb20c3a4179f762c9a4aa143f02bc888b486e20e9143"
+        },
+        "SequenceHelper": {
+          "rva": "0x737760",
+          "length": 330,
+          "sha256": "660ec0ccb54fc28a7148117946a27dd6b32cfb7b3b47e6a827183089c510053d"
+        },
+        "GuideBinding": {
+          "rva": "0xe434c0",
+          "length": 466,
+          "sha256": "07dbefa4255156d3091695b57a2bdade42fbaafad90bc883629c1c1fec4c9f21"
+        },
+        "GuideRefresh": {
+          "rva": "0xe43100",
+          "length": 432,
+          "sha256": "6a1192cc72f7a6195952301f9bf6373b80431c7824589f9dbff81aba58226504"
+        }
+      }
     }
   ]
 }

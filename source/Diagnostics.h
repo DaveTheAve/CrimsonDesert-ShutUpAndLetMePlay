@@ -133,7 +133,8 @@ struct Diagnostics {
         const Observation& s = snap.observation;
         length = 0;
         add("{\n  \"schema_version\": 1,\n  \"mod\": \"ShutUpAndLetMePlay\",\n  \"version\": \"" SULMP_VERSION "\",\n  \"session_id\": \"");
-        add(session); add("\",\n  \"process_id\": "); number(process);
+        add(session); add("\",\n  \"build_id\": ");quoted(SULMP_BUILD_ID);
+        add(",\n  \"process_id\": "); number(process);
         add(",\n  \"revision\": "); number(revision);
         add(",\n  \"status\": \""); add(status); add("\",\n  \"reason\": \""); add(reason ? reason : "");
         add("\",\n  \"visual_verification\": \"not measured; counters verify native style state, not pixels\",\n  \"pe_timestamp\": \"");
@@ -156,7 +157,13 @@ struct Diagnostics {
         field("set_keyguide_appearance_rva", resolved.setAppearance);
         field("native_skip_semantic_rva", resolved.skipSemantic);
         field("appear_style_global_rva", resolved.symbols[Sym_AppearStyle]);
-        field("disappear_style_global_rva", resolved.symbols[Sym_DisappearStyle], false);
+        field("disappear_style_global_rva", resolved.symbols[Sym_DisappearStyle]);
+        field("native_profile",resolved.profile);
+        field("keyguide_binding_rva",resolved.guideBinding);
+        field("keyguide_refresh_rva",resolved.guideRefresh);
+        field("keyguide_action_offset",resolved.guideActionOffset);
+        field("keyguide_family_offset",resolved.guideFamilyOffset);
+        field("keyguide_subtype_offset",resolved.guideSubtypeOffset,false);
         add("  },\n  \"runtime\": {\n");
         field("snapshot_available", snap.available);
         field("ui_thread_id", snap.uiThread);
@@ -168,6 +175,12 @@ struct Diagnostics {
         field("appearance_repairs", s.appearanceRepairs);
         field("native_style_state_verified", s.appearanceVerified);
         field("safety_gate_blocks", s.blocks);
+        field("appearance_view_blocks", s.appearanceViewBlocks);
+        field("appearance_style_blocks", s.appearanceStyleBlocks);
+        field("last_cutscene_gate_code", s.lastViewFailure);
+        field("last_cutscene_guide_failure",s.lastGuideFailure);
+        field("last_cutscene_guide_role",s.lastGuideRole);
+        field("last_cutscene_observed_action_hash",s.lastActionHash);
         field("interaction_disable_cleanup", s.cleanupCalls);
         state("last_cinema_mode", s.lastMode == 255 ? -1 : I32(s.lastMode));
         state("last_input_family", s.lastInputFamily == 255 ? -1 : I32(s.lastInputFamily));
@@ -213,6 +226,7 @@ struct Diagnostics {
 
         length = 0;
         add("ShutUpAndLetMePlay " SULMP_VERSION "\nSession: "); add(session);
+        add("\nBuild ID: " SULMP_BUILD_ID);
         add("\nProcess ID: "); number(process); add("\nRevision: "); number(revision);
         add("\nStatus: "); add(status); add("\nReason: "); add(reason ? reason : "");
         add("\nImage validation stage: ");add(image.stage);add("\nExecutable sections: ");number(image.executableCount);
@@ -222,6 +236,12 @@ struct Diagnostics {
         add("\nAppearance repairs: "); number(s.appearanceRepairs);
         add("\nNative style-state checks passed: "); number(s.appearanceVerified);
         add("\nSafety-gate blocks: "); number(s.blocks);
+        add("\nAppearance view gate blocks: "); number(s.appearanceViewBlocks);
+        add("\nAppearance style gate blocks: "); number(s.appearanceStyleBlocks);
+        add("\nLast view gate code: "); number(s.lastViewFailure);
+        add("\nLast guide failure code: ");number(s.lastGuideFailure);
+        add("\nLast guide role: ");number(s.lastGuideRole);
+        add("\nKeyguide action offset: ");hex(resolved.guideActionOffset);
         add("\nPrevious diagnostic write errors: "); number(priorErrors);
         add("\nLast diagnostic write error: "); number(priorError);
         add("\nNPC dialogue feature: ");add(snap.dialogueEnabled?"enabled":"disabled");

@@ -14,6 +14,41 @@ inline bool sequencerReferences(const Image&im,U32 r,const DialoguePattern&p,Seq
         U32&v=z.symbols[q.symbol];if(v&&v!=target)return false;v=target;}
     return dialogueUnwind(im,r,p);
 }
+
+inline bool resolveSequencer3479(const Image&im,const DialogueResolved&dialogue,SequencerResolved&z){
+    z=SequencerResolved{};
+    if(!dialogue.ready){z.failure="updated dialogue input not verified";return false;}
+    z.skip=unique(im,NewSequenceSkipSignature);
+    z.finish=unique(im,NewSequenceFinishSignature);
+    U32 helper=unique(im,NewSequenceHelperSignature);
+    if(!z.skip||!z.finish||!helper){z.failure="updated sequencer shapes absent or ambiguous";return false;}
+    // The updated input now calls a native actor-acquisition helper rather than
+    // calling the sequence endpoint directly. Both links must match.
+    if(!newCall(im,dialogue.input,0x192,helper)||!newCall(im,helper,0x6A,z.skip)){
+        z.failure="updated sequencer input/actor helper call chain changed";return false;
+    }
+    U32 state=relative(im,z.skip,0x1D7,0x1DB);
+    U32 state2=relative(im,z.skip,0x21B,0x21F);
+    if(!state||state!=state2||!im.accessible(state,8)){
+        z.failure="updated sequencer state facade no longer agrees";return false;
+    }
+    U32 callback=relative(im,z.skip,0x1B0,0x1B4);
+    if(!callback||!im.code(callback,5)||im.base[callback]!=0xE9||
+       relative(im,callback,1,5)!=z.finish){
+        z.failure="updated native sequencer completion callback changed";return false;
+    }
+    z.symbols[SequencerSymStateFacade]=state;
+    z.symbols[SequencerSymCallback]=callback;
+    const U8 skipUw[]={0x11,0x23,0x0d,0,0x23,0x68,0x0b,0,0x1e,0x64,0x20,0,0x1e,0x34,0x1f,0,0x1e,0x01,0x18,0,0x13,0xf0,0x11,0xe0,0x0f,0xc0,0x0d,0x70,0x0c,0x50,0,0};
+    const U8 finishUw[]={0x11,0x10,0x08,0,0x10,0x34,0x11,0,0x10,0x92,0x0c,0xf0,0x0a,0xe0,0x08,0x70,0x07,0x60,0x06,0x50};
+    const U8 helperUw[]={0x11,0x17,0x06,0,0x17,0x64,0x14,0,0x17,0x34,0x13,0,0x17,0xf2,0x10,0x70};
+    if(!newUnwind(im,z.skip,NewSequenceSkipSignature.size,skipUw,sizeof(skipUw))||
+       !newUnwind(im,z.finish,NewSequenceFinishSignature.size,finishUw,sizeof(finishUw))||
+       !newUnwind(im,helper,NewSequenceHelperSignature.size,helperUw,sizeof(helperUw))){
+        z.failure="updated sequencer function boundary or unwind changed";return false;
+    }
+    z.ready=true;z.failure=nullptr;return true;
+}
 inline bool resolveSequencer(const Image&im,const DialogueResolved&dialogue,SequencerResolved&z){
     z=SequencerResolved{};
     if(!dialogue.ready){z.failure="shared native input route unavailable";return false;}
@@ -63,10 +98,11 @@ struct Sequencer {
         Behavior*c=dialogue->core;
         void*facade=dialogue->ptr(c->image.base+resolved.symbols[SequencerSymStateFacade],0);
         if(!dialogue->ok(facade,8))return false;void*state=dialogue->ptr(facade,0);
-        if(!dialogue->ok(state,0x1080))return false;
+        if(!dialogue->ok(state,dialogue->core->resolved.profile==1?0x10B8u:0x1080u))return false;
         void*manager=dialogue->ptr(c->image.base+c->resolved.symbols[Sym_GameManager],0);
         return dialogue->ok(manager,0x98)&&dialogue->ptr(manager,0x90)==state&&
-            ((U8*)state)[0x107E]==mode&&!((U8*)state)[0x107D];
+            ((U8*)state)[dialogue->core->resolved.profile==1?0x10B6:0x107E]==mode&&
+            !((U8*)state)[dialogue->core->resolved.profile==1?0x10B5:0x107D];
     }
     void beforeInteraction(void*self,U8 enabled){
         if(!dialogue||!enabled||!readyMode(dialogue->core->mode()))return;

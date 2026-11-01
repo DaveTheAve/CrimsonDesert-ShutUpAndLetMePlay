@@ -102,11 +102,39 @@ static W32 NATIVE_ABI wResume(void*){CHECK(suspendedCount>0);--suspendedCount;re
 static int NATIVE_ABI wContext(void*h,U8*c){CHECK(suspendedCount>0&&u32(c+48)==0x100001);++contextCalled;if(scenario=="context"&&h==(void*)101)return 0;
     U64 rip=0xDEADBEEF;if(scenario=="busy"&&!injected){injected=true;rip=(U64)base+behavior.resolved.interaction+5;}std::memcpy(c+248,&rip,8);return 1;}
 static int NATIVE_ABI wExitCode(void*,W32*c){*c=259;return 1;}
-static U8 NATIVE_ABI wAddTable(U8*t,W32 n,U64 b){CHECK(!suspendedCount&&n==1&&u32(t)==0&&u32(t+4)==29&&u32(t+8)==32);const U8*expected=behavior.resolved.unwind;
-if(same((void*)b,DialogueInputBytes,15))expected=DialogueInputTrampolineUnwind;
-if(same((void*)b,DialogueUpdateBytes,15))expected=DialogueUpdateTrampolineUnwind;
-CHECK(std::memcmp((void*)(b+32),expected,16)==0);++unwindCalled;if(scenario=="npc_late_change"&&unwindCalled==2)base[behavior.resolved.skipSemantic-0x172]=0x90;
-if((scenario=="unwind"&&unwindCalled==2)||(scenario=="npc_unwind"&&unwindCalled==4))return 0;registeredTables[t]=true;return 1;}
+static U8 NATIVE_ABI wAddTable(U8*t,W32 n,U64 b){
+    CHECK(!suspendedCount&&n==1&&u32(t)==0);
+    const U8*expected=behavior.resolved.unwind;
+    U32 unwindAt=32,size=16;
+    if(behavior.resolved.profile==1){
+        if(same((void*)b,NewAppearanceBytes,11)){
+            CHECK(u32(t+4)==41&&u32(t+8)==64);
+            unwindAt=64;size=8;expected=behavior.resolved.appearanceUnwind;
+            CHECK(*((U8*)b+11)==0x75&&*((U8*)b+12)==14);
+            CHECK(*((U8*)b+13)==0xFF&&*((U8*)b+14)==0x25);
+            CHECK(*((U8*)b+27)==0xFF&&*((U8*)b+28)==0x25);
+            U64 taken=0,continuation=0;
+            std::memcpy(&taken,(void*)(b+19),8);
+            std::memcpy(&continuation,(void*)(b+33),8);
+            CHECK(taken==(U64)base+behavior.resolved.appearance+17+
+                  (I32)u32(base+behavior.resolved.appearance+13));
+            CHECK(continuation==(U64)base+behavior.resolved.appearance+17);
+        }else{
+            CHECK(u32(t+4)==29&&u32(t+8)==32);
+            if(same((void*)b,NewInputBytes,15))expected=NewInputTrampolineUnwind;
+            if(same((void*)b,NewUpdateBytes,15)){expected=NewUpdateTrampolineUnwind;size=4;}
+        }
+    }else{
+        CHECK(u32(t+4)==29&&u32(t+8)==32);
+        if(same((void*)b,DialogueInputBytes,15))expected=DialogueInputTrampolineUnwind;
+        if(same((void*)b,DialogueUpdateBytes,15))expected=DialogueUpdateTrampolineUnwind;
+    }
+    CHECK(std::memcmp((void*)(b+unwindAt),expected,size)==0);
+    ++unwindCalled;
+    if(scenario=="npc_late_change"&&unwindCalled==2)base[behavior.resolved.skipSemantic-0x172]=0x90;
+    if((scenario=="unwind"&&unwindCalled==2)||(scenario=="npc_unwind"&&unwindCalled==4))return 0;
+    registeredTables[t]=true;return 1;
+}
 static U8 NATIVE_ABI wDeleteTable(void*t){CHECK(!suspendedCount&&registeredTables.count(t));registeredTables.erase(t);return 1;}
 static void* NATIVE_ABI wCreateFile(const char16_t*p,W32 access,W32,void*,W32 disposition,W32,void*){CHECK(!suspendedCount&&access==0x40000000&&disposition==2);if(scenario=="readonly"){lastError=5;return (void*)-1;}void*h=(void*)(U64)(1000+fileCounter++);fileHandles[h]=narrow(p);files[fileHandles[h]].clear();return h;}
 static int NATIVE_ABI wWrite(void*h,const void*p,W32 n,W32*out,void*){
