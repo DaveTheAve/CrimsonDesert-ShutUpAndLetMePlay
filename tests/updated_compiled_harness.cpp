@@ -14,7 +14,39 @@ static void segvHandler(int signal,siginfo_t*info,void*ctx){
  void*bt[48];int count=backtrace(bt,48);backtrace_symbols_fd(bt,count,2);_exit(128+signal);
 }
 
+static bool modern3663=false;
+static DialogueResolved actualDialogue;
+static SequencerResolved actualSequence;
 static U32 actualAppearance=0;
+// Reviewed reference-only helper RVAs for isolated mocks. Runtime resolution
+// never uses this table or an executable/version whitelist.
+static U32 referenceHelper(U32 old){
+    if(!modern3663)return old;
+    switch(old){
+        case 0x149DE20:return 0x14DE770;
+        case 0x30C5540:return 0x3134F60;
+        case 0x3D76C0:return 0x3DB480;
+        case 0xE43F80:return 0xE7EE60;
+        case 0x30B31F0:return 0x3122C20;
+        case 0x30C5C10:return 0x3135630;
+        case 0xE44E80:return 0xE7FDD0;
+        case 0xE432B0:return 0xE7E190;
+        case 0xE433B0:return 0xE7E290;
+        case 0xE42F00:return 0xE7DDE0;
+        case 0x717660:return 0x744350;
+        case 0xE41310:return 0xE7C1F0;
+        case 0xE42500:return 0xE7D3E0;
+        case 0x38933C0:return 0x3912620;
+        case 0x3896A70:return 0x3915AF0;
+        case 0x38974A0:return 0x3916520;
+        case 0xE4A770:return 0xE85620;
+        case 0xE434C0:return 0xE7E3A0;
+        case 0xE43100:return 0xE7DFE0;
+        case 0xE45D30:return 0xE80C80;
+        default:throw std::runtime_error("unknown isolated helper");
+    }
+}
+
 static U32 actualSequencerState=0;
 static Memory* runtimeGame=nullptr;
 // Do not construct the current keyguide using the legacy fixture's fields.
@@ -45,20 +77,20 @@ static void prepareNativeKeyguides(){
     put32(nativeGuideBackend.data()+0x28,1);
     set(nativeGuideEntries.data(),0x10,nativeBindingRegistry.data());
     set(base+0x564B020,0x118,(void*)nativeData);
-    runtimeGame->executable(0xE434C0,0x1D2); // actual binding setter
-    runtimeGame->executable(0xE43100,0x1B0); // actual binding/cache refresh
-    stub(*runtimeGame,0x149DE20,(void*)internAction);
-    stub(*runtimeGame,0x30C5540,(void*)acquireAction);
-    stub(*runtimeGame,0x30C5C10,(void*)bindingLookup);
+    runtimeGame->executable(behavior.resolved.guideBinding,0x1D2); // actual binding setter
+    runtimeGame->executable(behavior.resolved.guideRefresh,0x1B0); // actual binding/cache refresh
+    stub(*runtimeGame,referenceHelper(0x149DE20),(void*)internAction);
+    stub(*runtimeGame,referenceHelper(0x30C5540),(void*)acquireAction);
+    stub(*runtimeGame,referenceHelper(0x30C5C10),(void*)bindingLookup);
     for(U32 r:{0x3D76C0u,0xE43F80u,0x30B31F0u,0xE44E80u,
-               0xE432B0u,0xE433B0u,0xE42F00u,0x717660u,0xE41310u,0xE42500u,0xE45D30u,0xE45DE0u,0xE4A770u})
-        stub(*runtimeGame,r,(void*)noOperation);
+               0xE432B0u,0xE433B0u,0xE42F00u,0x717660u,0xE41310u,0xE42500u,0xE45D30u,0xE4A770u})
+        stub(*runtimeGame,referenceHelper(r),(void*)noOperation);
     // Execute real style-vector add/remove logic. Preallocated capacity avoids
     // the allocator. Only sort/invalidation callbacks are inert lower layers.
     runtimeGame->executable(behavior.resolved.setAppearance,NewSetAppearanceSignature.size);
-    runtimeGame->executable(0x3896A70,0xA0);
-    stub(*runtimeGame,0x38933C0,(void*)noOperation);
-    stub(*runtimeGame,0x38974A0,(void*)noOperation);
+    runtimeGame->executable(referenceHelper(0x3896A70),0xA0);
+    stub(*runtimeGame,referenceHelper(0x38933C0),(void*)noOperation);
+    stub(*runtimeGame,referenceHelper(0x38974A0),(void*)noOperation);
     runtimeGame->executable(behavior.resolved.symbols[Sym_ResetKeyguide],0x1D0);
 }
 static void bindUpdatedGuides(Fixture&f,U8 family=0,U8 subtype=0){
@@ -67,20 +99,21 @@ static void bindUpdatedGuides(Fixture&f,U8 family=0,U8 subtype=0){
         // Stale old offset deliberately has no valid action; only native code
         // assigns the new slot. New cache bytes are inputs to the native setter.
         set(g.object.data(),0x1F8,nullptr);
-        set(g.object.data(),0x1E8,nullptr);
-        g.object[0x1F0]=family;g.object[0x1F1]=subtype;
+        set(g.object.data(),behavior.resolved.guideActionOffset,nullptr);
+        g.object[behavior.resolved.guideFamilyOffset]=family;g.object[behavior.resolved.guideSubtypeOffset]=subtype;
         expectedAction=g.action.data();expectedActionHash=hashes[i%3];
         U32 lookups=nativeBindingLookups;
         using Bind=void(NATIVE_ABI*)(void*,const char*,U8);
-        ((Bind)(base+0xE434C0))(g.object.data(),"fixture-action",1);
+        ((Bind)(base+behavior.resolved.guideBinding))(g.object.data(),"fixture-action",1);
         CHECK(nativeBindingLookups==lookups+2);
-        CHECK(Behavior{}.ptr(g.object.data(),0x1E8)==g.action.data());
+        CHECK(Behavior{}.ptr(g.object.data(),behavior.resolved.guideActionOffset)==g.action.data());
         CHECK(Behavior{}.ptr(g.object.data(),0x1F8)==nullptr);
-        CHECK(g.object[0x1F0]==(family==2?1:family)&&g.object[0x1F1]==subtype);
+        CHECK(g.object[behavior.resolved.guideFamilyOffset]==(family==2?1:family)&&g.object[behavior.resolved.guideSubtypeOffset]==subtype);
     }
 }
 static void testCurrentHooks(){
-    CHECK(virtualAllocations.size()==4&&registeredTables.size()==4);
+    U32 hooks=scenario=="resilience_input_guard"?2u:4u;
+    CHECK(virtualAllocations.size()==hooks&&registeredTables.size()==hooks);
     bool foundBranch=false;
     for(auto&[key,_]:registeredTables){
         U8*t=(U8*)key;
@@ -177,7 +210,8 @@ static void testCurrentHooks(){
         set(base,actualSequencerState,facade.data());
         other.rowShown();
         appearance(other.view.data(),1);
-        CHECK(other.appears(1)&&!other.disappears(1));
+        if(scenario=="resilience_input_guard")CHECK(!other.appears(1)&&other.disappears(1));
+        else CHECK(other.appears(1)&&!other.disappears(1));
         CHECK(dialogueState[0x10B6]==mode&&dialogueState[0x10B5]==0);
     }
 }
@@ -212,6 +246,7 @@ static void testRejectedCurrentGuide(){
     CHECK(f.guides[4].wrapper[0xBE]==1);
     CHECK(!f.appears(4)&&f.disappears(4));
 }
+#include "modern_routes.h"
 int main(int argc,char**argv){try{
     struct sigaction sa{};sa.sa_sigaction=segvHandler;sa.sa_flags=SA_SIGINFO;sigaction(SIGSEGV,&sa,nullptr);
     CHECK(argc>=3&&argc<=5);
@@ -219,11 +254,15 @@ int main(int argc,char**argv){try{
     bool guarded=scenario=="new_bad_action"||scenario=="new_null_action"||
         scenario=="new_unreadable_action"||scenario=="new_neighbor_action"||
         scenario=="new_bad_guide_type"||scenario=="new_style_guard";
-    bool expectSuccess=scenario=="new_success"||scenario=="new_pause_hidden"||guarded;
+    bool modernNPC=scenario.rfind("modern_",0)==0||scenario=="resilience_sequence";
+    bool modernSEQ=scenario.rfind("route_",0)==0||scenario=="resilience_dialogue"||scenario=="resilience_both_optional";
+    bool adaptive=scenario=="adaptive_layout";
+    U32 expectedHooks=scenario=="resilience_dialogue"?3:((scenario=="resilience_input_guard"||scenario=="resilience_both_optional")?2:4);
+    bool expectSuccess=modernNPC||modernSEQ||adaptive||scenario=="resilience_input_guard"||scenario=="new_input_changed"||scenario=="new_success"||scenario=="new_pause_hidden"||guarded;
     CHECK(expectSuccess||scenario=="new_shape"||scenario=="new_ambiguous"||
           scenario=="allocation"||scenario=="unwind"||scenario=="new_input_changed"||
           scenario=="new_binding_shape"||scenario=="new_binding_link"||scenario=="new_binding_ambiguous"||
-          scenario=="new_cache_shape"||scenario=="new_binding_unwind");
+          scenario=="new_cache_shape"||scenario=="new_binding_unwind"||scenario=="invalid_layout_bound"||scenario=="invalid_layout_alignment"||scenario=="new_skip_target"||scenario=="new_skip_ambiguous");
     auto game=loadPE(argv[1],false);
     base=game->b;
     CHECK(parseImage(base,behavior.image));
@@ -234,8 +273,9 @@ int main(int argc,char**argv){try{
     SequencerResolved sr;
     CHECK(resolveDialogue3479(behavior.image,behavior.resolved,dr));
     CHECK(resolveSequencer3479(behavior.image,dr,sr));
-    CHECK(behavior.resolved.interaction==0x12145E0u);
-    CHECK(behavior.resolved.appearance==0x1214370u);
+    modern3663=dr.cacheLayout==1;actualDialogue=dr;actualSequence=sr;
+    CHECK(behavior.resolved.interaction==(modern3663?0x124FDF0u:0x12145E0u));
+    CHECK(behavior.resolved.appearance==(modern3663?0x124FB80u:0x1214370u));
     actualAppearance=behavior.resolved.appearance;
     actualSequencerState=sr.symbols[SequencerSymStateFacade];
     put32(base+behavior.resolved.symbols[Sym_AppearStyle],0x4321);
@@ -251,9 +291,31 @@ int main(int argc,char**argv){try{
     asi->executable(u32(asi->b+op+20),u32(asi->b+op+4));
     dllMain=(int(NATIVE_ABI*)(void*,W32,void*))(asi->b+u32(asi->b+op+16));
     runtimeGame=game.get();
-    workerSimulation=(guarded||scenario=="new_pause_hidden")?testRejectedCurrentGuide:(expectSuccess?testCurrentHooks:nullptr);
+    workerSimulation=modernNPC?testModernDialogue:modernSEQ?testModernSequence:(guarded||scenario=="new_pause_hidden")?testRejectedCurrentGuide:(expectSuccess?testCurrentHooks:nullptr);
     // Corrupt a validated native function or create an ambiguous code copy.
     // No hooks may install in either case, even when older signatures exist.
+    if(scenario=="resilience_dialogue"||scenario=="resilience_both_optional")base[dr.update+0x40]^=1;
+    if(scenario=="resilience_sequence"||scenario=="resilience_both_optional")base[sr.skip+0x50]^=1;
+    if(scenario=="resilience_input_guard")base[dr.input+0x85]^=1;
+    if(scenario=="invalid_layout_bound"||scenario=="invalid_layout_alignment"){
+        U32 action=scenario=="invalid_layout_bound"?0x208u:0x1E9u;
+        put32(base+behavior.resolved.guideBinding+0x97,action);put32(base+behavior.resolved.guideRefresh+0xA9,action);
+        put32(base+behavior.resolved.guideBinding+0x18E,action+8);put32(base+behavior.resolved.guideRefresh+0x181,action+8);
+        put32(base+behavior.resolved.guideBinding+0x187,action+9);put32(base+behavior.resolved.guideRefresh+0x18B,action+9);
+    }
+    if(scenario=="new_skip_target")base[behavior.resolved.skipSemantic+20]^=1;
+    if(scenario=="new_skip_ambiguous"){
+        U32 dup=0x13000000u;CHECK(behavior.image.code(dup,52));
+        std::memcpy(base+dup,base+behavior.resolved.skipSemantic,52);
+    }
+    if(adaptive){
+        for(U32 offset:{0x97u,0x187u,0x18Eu})put32(base+behavior.resolved.guideBinding+offset,u32(base+behavior.resolved.guideBinding+offset)-16);
+        for(U32 offset:{0xA9u,0x181u,0x18Bu})put32(base+behavior.resolved.guideRefresh+offset,u32(base+behavior.resolved.guideRefresh+offset)-16);
+        // Fixtures use the independently recovered fields only AFTER native
+        // code has been altered. The native setter must actually populate them.
+        Resolved adjusted;CHECK(resolve3479(behavior.image,adjusted));behavior.resolved=adjusted;
+        CHECK(adjusted.guideActionOffset==0x1D8&&adjusted.guideFamilyOffset==0x1E0&&adjusted.guideSubtypeOffset==0x1E1);
+    }
     if(scenario=="new_shape")base[actualAppearance+30]^=1;
     if(scenario=="new_input_changed")base[dr.input+0x400]^=1;
     if(scenario=="new_binding_shape")base[behavior.resolved.guideBinding+0x97]^=0x10;
@@ -292,23 +354,36 @@ int main(int argc,char**argv){try{
         CHECK(report.find("\"status\": \"disabled\"")!=std::string::npos);
         if(scenario!="new_shape"&&scenario!="new_ambiguous"&&scenario!="new_input_changed")
             CHECK(std::memcmp(originalAppear,base+actualAppearance,17)==0);
-        std::cout<<"PASS compiled ASI 3479 / "<<scenario<<": fail-closed, no active hooks; assertions="<<checks<<"\n";
+        std::cout<<"PASS compiled ASI modern / "<<scenario<<": fail-closed, no active hooks; assertions="<<checks<<"\n";
         return 0;
     }
-    CHECK(gameRan&&unwindCalled==4&&registeredTables.size()==4&&virtualAllocations.size()==4);
+    CHECK(gameRan&&unwindCalled==expectedHooks&&registeredTables.size()==expectedHooks&&virtualAllocations.size()==expectedHooks);
     CHECK(std::memcmp(originalAppear,base+actualAppearance,17)!=0);
     CHECK(report.find("\"status\": \"active\"")!=std::string::npos);
     CHECK(report.find("\"npc_dialogue\": {")!=std::string::npos);
     CHECK(report.find("\"sequencer_dialogue\": {")!=std::string::npos);
-    CHECK(report.find("\"version\": \"2.0.2\"")!=std::string::npos);
+    CHECK(report.find("\"version\": \"" SULMP_VERSION "\"")!=std::string::npos);
     CHECK(report.find("\"build_id\": \"" SULMP_BUILD_ID "\"")!=std::string::npos);
-    CHECK(report.find("\"keyguide_action_offset\": 488")!=std::string::npos);
-    CHECK(report.find("\"keyguide_family_offset\": 496")!=std::string::npos);
-    CHECK(report.find("\"keyguide_subtype_offset\": 497")!=std::string::npos);
+    CHECK(report.find("\"keyguide_action_offset\": "+std::to_string(behavior.resolved.guideActionOffset))!=std::string::npos);
+    CHECK(report.find("\"keyguide_family_offset\": "+std::to_string(behavior.resolved.guideFamilyOffset))!=std::string::npos);
+    CHECK(report.find("\"keyguide_subtype_offset\": "+std::to_string(behavior.resolved.guideSubtypeOffset))!=std::string::npos);
+    if(scenario=="resilience_dialogue"){
+        CHECK(report.find("\"input_hook_enabled\": 1")!=std::string::npos);
+        CHECK(report.find("\"npc_dialogue\": {\n    \"enabled\": 0")!=std::string::npos);
+        CHECK(report.find("\"sequencer_dialogue\": {\n    \"enabled\": 1")!=std::string::npos);
+    }
+    if(scenario=="resilience_input_guard"||scenario=="resilience_both_optional")
+        CHECK(report.find("\"input_hook_enabled\": 0")!=std::string::npos);
+    if(scenario=="resilience_sequence"){
+        CHECK(report.find("\"npc_dialogue\": {\n    \"enabled\": 1")!=std::string::npos);
+        CHECK(report.find("\"sequencer_dialogue\": {\n    \"enabled\": 0")!=std::string::npos);
+    }
+    if(modernSEQ){std::cout<<"PASS native input/sequence / "<<scenario<<" / hooks="<<expectedHooks<<" / assertions="<<checks<<"\n";return 0;}
+    if(modernNPC){std::cout<<"PASS modern native dialogue / "<<scenario<<" / assertions="<<checks<<"\n";return 0;}
     if(scenario=="new_pause_hidden"){
         CHECK(report.find("\"appearance_repairs\": 1")!=std::string::npos);
         CHECK(report.find("\"safety_gate_blocks\": 0")!=std::string::npos);
-        std::cout<<"PASS compiled ASI 3479 / hidden Pause: Skip restored without changing Pause; assertions="<<checks<<"\n";
+        std::cout<<"PASS compiled ASI modern / hidden Pause: Skip restored without changing Pause; assertions="<<checks<<"\n";
         return 0;
     }
     if(guarded){
@@ -321,7 +396,7 @@ int main(int argc,char**argv){try{
             U32 reason=(scenario=="new_bad_action"||scenario=="new_neighbor_action")?4:3;
             CHECK(report.find("\"last_cutscene_guide_failure\": "+std::to_string(reason))!=std::string::npos);
         }
-        std::cout<<"PASS compiled ASI 3479 / "<<scenario<<": incorrect guide rejected without old-slot fallback; assertions="<<checks<<"\n";
+        std::cout<<"PASS compiled ASI modern / "<<scenario<<": incorrect guide rejected without old-slot fallback; assertions="<<checks<<"\n";
         return 0;
     }
     CHECK(report.find("\"last_input_family\": 1")!=std::string::npos);
@@ -330,6 +405,6 @@ int main(int argc,char**argv){try{
     CHECK(report.find("\"appearance_view_blocks\": 1")!=std::string::npos);
     CHECK(report.find("\"appearance_style_blocks\": 0")!=std::string::npos);
     CHECK(report.find("\"last_cutscene_gate_code\": 7")!=std::string::npos);
-    std::cout<<"PASS compiled ASI 3479: 4 hooks and relocated trampoline, all routes enabled; assertions="<<checks<<"\n";
+    std::cout<<"PASS compiled ASI modern: native UI and validated route installation; assertions="<<checks<<"\n";
     return 0;
 }catch(const std::exception&e){std::cerr<<e.what()<<"\n";return 2;}}

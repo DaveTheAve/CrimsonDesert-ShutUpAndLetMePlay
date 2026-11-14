@@ -34,7 +34,7 @@ trap 'rm -rf -- "$BUILD"' EXIT
 if [[ "$PROFILE" == "refactored" ]]; then
   g++ -std=c++17 -O2 -Wall -Wextra -Werror -Wno-misleading-indentation -Wno-unused-function \
     "$ROOT/tests/updated_compiled_harness.cpp" -o "$BUILD/updated_compiled_harness"
-  for scenario in new_success new_shape new_ambiguous allocation unwind new_input_changed new_binding_shape new_binding_link new_binding_ambiguous new_cache_shape new_binding_unwind new_bad_action new_null_action new_unreadable_action new_neighbor_action new_bad_guide_type new_style_guard new_pause_hidden; do
+  for scenario in $(python3 -c 'import json,sys;print(" ".join(json.load(open(sys.argv[1]))))' "$ROOT/tests/modern_scenarios.json"); do
     "$BUILD/updated_compiled_harness" "$1" "$ROOT/ShutUpAndLetMePlay.asi" "$scenario" "$BUILD/reports"
   done
   python3 "$ROOT/tests/validate_reports.py" "$BUILD/reports" --updated

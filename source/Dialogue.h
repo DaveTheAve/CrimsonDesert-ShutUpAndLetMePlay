@@ -29,7 +29,7 @@ struct Dialogue {
     DialogueUpdate originalUpdate=nullptr;DialogueInput originalInput=nullptr;
     DialogueAdvance advance=nullptr;DialogueCurrent current=nullptr;DialogueStop stopVoice=nullptr;
     DialogueClock clock=nullptr;
-    U32 enabled=0,mailboxLock=0,updateLock=0,dirty=0;
+    U32 enabled=0,inputEnabled=0,mailboxLock=0,updateLock=0,dirty=0;
     DialogueOffer offer,request;bool requested=false;
     // Only the natural dialogue-update callback owns the job. No dialogue/context
     // pointer is kept: the game's callers pass temporary stack copies of it.
@@ -64,13 +64,27 @@ struct Dialogue {
     // address, or call dialogue-native methods from the UI/reporting threads.
     void*record(void*ctx)const {
         void*store=ptr(core->image.base+resolved.symbols[DialogueSymRuleStore],0);
-        if(!ok(store,0x60))return nullptr;
-        U32 id=u32((U8*)ctx+4),index=u32((U8*)ctx+8),count=u32((U8*)store+8);
-        if(count>1000000||id>=count||index>65535)return nullptr;
-        void**cache=(void**)ptr(store,0x58);
+        U32 id=u32((U8*)ctx+4),index=u32((U8*)ctx+8);
+        if(index>65535)return nullptr;
+        void*database=nullptr;
+        if(resolved.cacheLayout==1){
+            if(!ok(store,0x30))return nullptr;
+            U32 count=u32((U8*)store+0x28);
+            if(count>1000000||id>=count)return nullptr;
+            U8*entries=(U8*)ptr(store,0x20);
+            if(!ok(entries,count*24))return nullptr;
+            database=ptr(entries+id*24,8);
+        }else{
+            if(!ok(store,0x60))return nullptr;
+            U32 count=u32((U8*)store+8);
+            if(count>1000000||id>=count)return nullptr;
+            void**cache=(void**)ptr(store,0x58);
+            if(!ok(cache,count*8))return nullptr;
+            database=cache[id];
+        }
         U32 rowOffset=core->resolved.profile==1?0x110u:0x120u;
-        if(!ok(cache,count*8)||!ok(cache[id],rowOffset+16))return nullptr;
-        void*database=cache[id];U32 rows=u32((U8*)database+rowOffset+8);
+        if(!ok(database,rowOffset+16))return nullptr;
+        U32 rows=u32((U8*)database+rowOffset+8);
         if(!rows||rows>65536||index>=rows)return nullptr;
         U8*data=(U8*)ptr(database,rowOffset);
         if(!ok(data,rows*0x90))return nullptr;return data+index*0x90;

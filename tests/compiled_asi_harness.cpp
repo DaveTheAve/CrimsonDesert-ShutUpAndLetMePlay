@@ -119,6 +119,10 @@ static U8 NATIVE_ABI wAddTable(U8*t,W32 n,U64 b){
             CHECK(taken==(U64)base+behavior.resolved.appearance+17+
                   (I32)u32(base+behavior.resolved.appearance+13));
             CHECK(continuation==(U64)base+behavior.resolved.appearance+17);
+        }else if(same((void*)b,PatchUpdateBytes,16)){
+            CHECK(u32(t+4)==30&&u32(t+8)==32);
+            CHECK(*((U8*)b+16)==0xFF&&*((U8*)b+17)==0x25);
+            expected=PatchUpdateTrampolineUnwind;size=16;
         }else{
             CHECK(u32(t+4)==29&&u32(t+8)==32);
             if(same((void*)b,NewInputBytes,15))expected=NewInputTrampolineUnwind;

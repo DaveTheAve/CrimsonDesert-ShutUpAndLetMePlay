@@ -87,7 +87,7 @@ That means many game updates that simply move code around, change RVAs, or rearr
 
 If Pearl Abyss substantially rewrites the relevant native code, a signature becomes ambiguous, or another mod has already modified the same entry points, Shut Up & Let Me Play fails safely instead of hooking an unknown function and hoping for the best. At that point, the mod may need an update.
 
-The updated native routines have been checked against **`CrimsonDesert.exe` file version `1.0.0.3479`**, with regression coverage for the prior tested versions **`1.0.0.2944`** and **`1.0.0.2949`**. These are diagnostic reference versions, **not** hard-coded compatibility locks. The new 3479 build still requires an in-game test to confirm the rendered controls and conversation outcomes.
+The native routines have been checked in isolation against **`CrimsonDesert.exe` file version `1.0.0.3663`**, with regression coverage for **`1.0.0.3479`**, **`1.0.0.2949`**, and **`1.0.0.2944`**. These are diagnostic reference versions, **not** hard-coded compatibility locks. The current offline build still requires in-game confirmation.
 
 Do not hot-load or hot-unload the ASI.
 
@@ -137,7 +137,7 @@ If something breaks, use the repository's bug-report form and include both files
 - the scene or NPC conversation where it happened, including any response choice
 - relevant other mods
 
-The `image_validation` section records the startup validation stage, section layout, and the specific reason for an image rejection. The JSON separates normal cutscene activity (`runtime`), interaction dialogue (`npc_dialogue`), and sequencer-driven dialogue (`sequencer_dialogue`). Check each dialogue section's `enabled` flag and reason separately. Choice stops, progression, and per-mode activity help identify which route was used.
+The `image_validation` section records the startup validation stage, section layout, and the specific reason for an image rejection. The JSON separates normal cutscene activity (`runtime`), interaction dialogue (`npc_dialogue`), and sequencer-driven dialogue (`sequencer_dialogue`). Check each dialogue section's `enabled` flag and reason separately. The resolver also records shared-input validation/installation and the selected dialogue-cache and hook layouts. Choice stops, progression, and per-mode activity help identify which route was used.
 
 `active` means the core cutscene hooks installed successfully. It does **not** mean the diagnostic system grew eyes and personally watched your pixels.
 

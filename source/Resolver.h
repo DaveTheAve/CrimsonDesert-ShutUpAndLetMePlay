@@ -38,6 +38,7 @@ struct Resolved {
     U32 interaction=0,appearance=0,setAppearance=0,skipSemantic=0;
     U8 profile=0; // 0: original validated layout; 1: refactored cinematic/dialogue layout
     U8 appearanceUnwind[8]{};
+    U32 nativeInput=0,nativeInputSize=0,skipHelper=0;
     // Populated only after the selected native profile has been validated.
     U32 guideActionOffset=0x1F8,guideFamilyOffset=0x200,guideSubtypeOffset=0x201;
     U32 guideBinding=0,guideRefresh=0;
@@ -117,12 +118,87 @@ inline bool newCall(const Image&im,U32 r,U32 offset,U32 dest){
         relative(im,r+offset,1,5)==dest;
 }
 
+// Find a runtime-function owner, rather than assuming a fixed offset within a
+// larger input method. The table was bounds/order validated by loadImage.
+inline const U8* runtimeOwner(const Image&im,U32 r,U32 n){
+    U32 lo=0,hi=im.exceptionSize/12;
+    while(lo<hi){U32 mid=lo+(hi-lo)/2;
+        if(u32(im.base+im.exceptionRva+12*mid)<=r)lo=mid+1;else hi=mid;}
+    if(!lo)return nullptr;
+    const U8*e=im.base+im.exceptionRva+12*(lo-1);U32 begin=u32(e),end=u32(e+4);
+    return r>=begin&&r<end&&n<=end-r&&im.code(begin,end-begin)?e:nullptr;
+}
+
+// Validate precisely the native manual-Skip branch used by the restored UI.
+// Relocation or edits elsewhere in this large input method do not disable the
+// core feature. Both widgets, hold phase, appearance CALL and common return
+// target must still agree. No approximate/fuzzy matching is accepted.
+inline bool resolveSkipAction(const Image&im,Resolved&z){
+    U8 mask[52];for(U32 i=0;i<52;++i)mask[i]=255;
+    const U32 operands[]={20,28,38,43,48};
+    for(U32 off:operands)for(U32 i=0;i<4;++i)mask[off+i]=0;
+    const Signature branch={NewInputBytes+0x168,mask,52,nullptr,0};
+    U32 r=unique(im,branch);
+    const U8*owner=r?runtimeOwner(im,r,52):nullptr;
+    if(!owner){z.failure="manual Skip branch absent, ambiguous or outside a native function";return false;}
+    U32 begin=u32(owner),end=u32(owner+4),exit=relative(im,r,20,24);
+    if(end-begin>65536||exit<r+52||exit>=end||
+       relative(im,r,28,32)!=exit||relative(im,r,48,52)!=exit||
+       relative(im,r,38,42)!=z.appearance){
+        z.failure="manual Skip branch targets disagree";return false;
+    }
+    // A branch to a random instruction is not an acceptable native exit.
+    const U32 epilogSize=27;
+    if(end-exit!=epilogSize||!same(im.base+exit,NewInputBytes+sizeof(NewInputBytes)-epilogSize,epilogSize)){
+        z.failure="manual Skip branch native epilogue changed";return false;
+    }
+    U32 helper=relative(im,r,43,47);
+    if(!helper||!im.code(helper,16)){
+        z.failure="manual Skip native target outside executable code";return false;
+    }
+    z.nativeInput=begin;z.nativeInputSize=end-begin;z.skipSemantic=r;z.skipHelper=helper;
+    return true;
+}
+
+// Shared input hooks additionally need the verified ABI prologue and event/
+// type/membership guards. Changes to unrelated actions later in the function
+// do not affect these contracts. The core prompt itself needs no input hook.
+inline bool validateSharedInput(const Image&im,const Resolved&z){
+    if(!z.nativeInput||z.nativeInputSize<0x136||z.skipSemantic<z.nativeInput+0x102)return false;
+    U8 mask[0x102];copy(mask,NewInputMask,sizeof(mask));
+    // Keep local guard branches exact. Only larger function-relative exits and
+    // external RIP operands can move, and their destinations are checked below.
+    const U32 shortBranches[]={0x38u,0x53u,0x5Bu,0x76u,0x97u,0x9Cu,0xA6u,0xCDu,0xF2u};
+    for(U32 i:shortBranches)mask[i]=255;
+    Signature prefix={NewInputBytes,mask,sizeof(mask),nullptr,0};
+    if(!im.code(z.nativeInput,prefix.size)||!masked(im.base+z.nativeInput,prefix))return false;
+    U32 exit=z.nativeInput+z.nativeInputSize-27;
+    if(relative(im,z.nativeInput,0xEA,0xEE)!=exit||relative(im,z.nativeInput,0xFE,0x102)!=exit)return false;
+    const U32 jumpOperands[]={0xB1u,0xB9u};
+    for(U32 operand:jumpOperands){U32 target=relative(im,z.nativeInput,operand,operand+4);
+        if(target<z.nativeInput+0x102||target>=exit)return false;}
+    const U32 typeOperands[]={0x3Fu,0x62u};
+    for(U32 operand:typeOperands)if(!im.accessible(relative(im,z.nativeInput,operand,operand+4),4))return false;
+    if(!im.code(relative(im,z.nativeInput,0xE5,0xE9),5))return false;
+    const U8 inputUw[]={0x11,0x24,0x0b,0,0x24,0x34,0x45,0,0x24,0x01,0x3a,0,0x15,0xf0,0x13,0xe0,0x11,0xd0,0x0f,0xc0,0x0d,0x70,0x0c,0x60,0x0b,0x50,0,0};
+    return newUnwind(im,z.nativeInput,z.nativeInputSize,inputUw,sizeof(inputUw))&&
+        relative(im,z.nativeInput,0xC0,0xC4)==z.symbols[Sym_GameManager];
+}
+
 // Derive the current keyguide fields from independently scanned, complete
 // native binding/cache methods. No fallback probing of arbitrary object slots.
-// Structure displacements remain unmasked, so an unsupported layout fails closed.
+// Only the six mutually checked binding/cache displacements may vary. The
+// opcodes, all other object fields and calls remain fully checked.
 inline bool resolveGuideLayout3479(const Image&im,Resolved&z){
-    z.guideBinding=unique(im,NewGuideBindingSignature);
-    z.guideRefresh=unique(im,NewGuideRefreshSignature);
+    U8 bindingMask[sizeof(NewGuideBindingMask)],refreshMask[sizeof(NewGuideRefreshMask)];
+    copy(bindingMask,NewGuideBindingMask,sizeof(bindingMask));copy(refreshMask,NewGuideRefreshMask,sizeof(refreshMask));
+    const U32 bindingFields[]={0x97u,0x18Eu,0x187u},refreshFields[]={0xA9u,0x181u,0x18Bu};
+    for(U32 off:bindingFields)for(U32 j=0;j<4;++j)bindingMask[off+j]=0;
+    for(U32 off:refreshFields)for(U32 j=0;j<4;++j)refreshMask[off+j]=0;
+    Signature binding={NewGuideBindingBytes,bindingMask,sizeof(bindingMask),nullptr,0};
+    Signature refresh={NewGuideRefreshBytes,refreshMask,sizeof(refreshMask),nullptr,0};
+    z.guideBinding=unique(im,binding);
+    z.guideRefresh=unique(im,refresh);
     if(!z.guideBinding||!z.guideRefresh){
         z.failure="updated keyguide binding/cache shape missing or ambiguous";return false;
     }
@@ -141,7 +217,7 @@ inline bool resolveGuideLayout3479(const Image&im,Resolved&z){
     U32 action=u32(im.base+z.guideBinding+0x97);
     U32 family=u32(im.base+z.guideBinding+0x18E);
     U32 subtype=u32(im.base+z.guideBinding+0x187);
-    if(action!=0x1E8||family!=0x1F0||subtype!=0x1F1||
+    if(action<0xC0||action>0x200||(action&7)||family!=action+8||subtype!=family+1||
        u32(im.base+z.guideRefresh+0xA9)!=action||
        u32(im.base+z.guideRefresh+0x181)!=family||
        u32(im.base+z.guideRefresh+0x18B)!=subtype||
@@ -157,8 +233,7 @@ inline bool resolve3479(const Image&im,Resolved&z){
     z.interaction=unique(im,NewInteractionSignature);
     z.appearance=unique(im,NewAppearanceSignature);
     z.setAppearance=unique(im,NewSetAppearanceSignature);
-    U32 input=unique(im,NewInputSignature);
-    if(!z.interaction||!z.appearance||!z.setAppearance||!input){
+    if(!z.interaction||!z.appearance||!z.setAppearance){
         z.failure="updated native cinematic/input shape missing or ambiguous";return false;
     }
     // Fixed structure: the same state facade is read in both native row paths.
@@ -193,14 +268,7 @@ inline bool resolve3479(const Image&im,Resolved&z){
        !same(im.base+hide,hideBytes,sizeof(hideBytes))||!validateNames(im,z)){
         z.failure="updated native widget semantics or keyguide style names differ";return false;
     }
-    // Normal and fixed-row Skip are still handled by the native input path.
-    z.skipSemantic=input+0x168;
-    if(!im.code(z.skipSemantic,42)||!newCall(im,input,0x18D,z.appearance)||
-       !newCall(im,input,0x12C,z.appearance)||!newCall(im,input,0x208,z.appearance)||
-       im.base[z.skipSemantic]!=0x49||im.base[z.skipSemantic+1]!=0x3B||
-       im.base[z.skipSemantic+8]!=0x74||im.base[z.skipSemantic+18]!=0x0F){
-        z.failure="updated native Skip input no longer calls validated cinematic appearance";return false;
-    }
+    if(!resolveSkipAction(im,z))return false;
     const U8 interactionUw[]={1,15,6,0,15,0x64,7,0,15,0x34,6,0,15,0x32,11,0x70};
     const U8 appearanceUw[]={1,6,2,0,6,0x32,2,0x30};
     if(!newUnwind(im,z.interaction,NewInteractionSignature.size,interactionUw,sizeof(interactionUw))||

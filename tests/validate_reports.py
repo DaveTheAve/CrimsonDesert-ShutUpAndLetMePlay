@@ -9,7 +9,7 @@ from pathlib import Path
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
-    parser.add_argument("--updated", action="store_true", help="Validate the 1.0.0.3479 native keyguide scenarios")
+    parser.add_argument("--updated", action="store_true", help="Validate the modern native keyguide, dialogue, sequence and resilience scenarios")
     args = parser.parse_args()
     header = (Path(__file__).resolve().parent.parent / "source/Version.h").read_text()
     version = re.search(r'#define\s+SULMP_VERSION\s+"([0-9.]+)"', header).group(1)
@@ -27,10 +27,7 @@ def main() -> None:
                  "image_unsorted_unwind", "image_many_sections"}
     expected |= npc | seq
     if args.updated:
-        expected = {"new_success", "new_shape", "new_ambiguous", "allocation", "unwind", "new_input_changed",
-                    "new_binding_shape", "new_binding_link", "new_binding_ambiguous", "new_cache_shape",
-                    "new_binding_unwind", "new_bad_action", "new_null_action", "new_unreadable_action",
-                    "new_neighbor_action", "new_bad_guide_type", "new_style_guard", "new_pause_hidden"}
+        expected=set(json.loads((Path(__file__).resolve().parent/'modern_scenarios.json').read_text()))
     assert {p.parent.name for p in reports} == expected, "Missing/unexpected diagnostic test scenarios"
     for path in reports:
         obj = json.loads(path.read_text(encoding="utf-8"))
@@ -69,6 +66,7 @@ def main() -> None:
             assert image["executable_section_count"] == 3
         if path.parent.name in {"image_headers_unreadable", "image_code_unreadable", "image_unwind_unreadable", "image_unsorted_unwind", "image_no_code"}:
             assert obj["status"] == "disabled" and image["reason"] == obj["reason"]
+        assert ("enabled" if obj["resolver"]["input_hook_enabled"] else "disabled") == values["Shared input hook"]
         dialogue = obj["npc_dialogue"]
         assert ("enabled" if dialogue["enabled"] else "disabled") == values["NPC dialogue feature"]
         for field, key in [("accepted", "NPC dialogue requests accepted"),
@@ -94,41 +92,51 @@ def main() -> None:
         assert "last_view" not in obj["runtime"] and "last_skip_input" not in obj["runtime"]
     if args.updated:
         checks = {p.parent.name: json.loads(p.read_text()) for p in reports}
-        active = {"new_success", "new_bad_action", "new_null_action", "new_unreadable_action",
-                  "new_neighbor_action", "new_bad_guide_type", "new_style_guard", "new_pause_hidden"}
-        for name, obj in checks.items():
-            run = obj["runtime"]
-            if name not in active:
-                assert obj["status"] == "disabled" and run["appearance_repairs"] == 0
-                assert run["interaction_calls"] == run["appearance_calls"] == 0
+        disabled = {"new_shape","new_ambiguous","allocation","unwind","new_binding_shape",
+                    "new_binding_link","new_binding_ambiguous","new_cache_shape","new_binding_unwind",
+                    "invalid_layout_bound","invalid_layout_alignment","new_skip_target","new_skip_ambiguous"}
+        for name,obj in checks.items():
+            run=obj["runtime"];d=obj["npc_dialogue"];q=obj["sequencer_dialogue"];r=obj["resolver"]
+            if name in disabled:
+                assert obj["status"]=="disabled" and run["appearance_repairs"]==0
+                assert run["interaction_calls"]==run["appearance_calls"]==0
                 continue
-            assert obj["status"] == "active"
-            assert obj["npc_dialogue"]["enabled"] == obj["sequencer_dialogue"]["enabled"] == 1
-            assert obj["resolver"]["native_profile"] == 1
-            assert [obj["resolver"][k] for k in ("keyguide_action_offset", "keyguide_family_offset", "keyguide_subtype_offset")] == [0x1E8, 0x1F0, 0x1F1]
-            if name == "new_success":
-                assert run["appearance_repairs"] == run["native_style_state_verified"] == 51
-                assert run["preactivation_unlocks"] == run["initial_input_shows"] == run["interaction_disable_cleanup"] == 51
-                assert run["appearance_view_blocks"] == run["safety_gate_blocks"] == 1
-                assert run["appearance_style_blocks"] == 0 and run["last_cutscene_gate_code"] == 7
-                assert (run["last_input_family"], run["last_input_subtype"]) == (1, 2)
-                sequence = obj["sequencer_dialogue"]
-                assert sequence["mode_0_prompt_repairs"] == sequence["mode_2_prompt_repairs"] == 1
-                assert sequence["prompt_repairs"] == sequence["native_style_state_verified"] == 2
-            elif name == "new_pause_hidden":
-                assert run["appearance_repairs"] == run["native_style_state_verified"] == 1
-                assert run["safety_gate_blocks"] == 0
-            else:
-                assert run["appearance_repairs"] == run["native_style_state_verified"] == 0
-                assert run["safety_gate_blocks"] == 1
-                style = name == "new_style_guard"
-                assert run["appearance_view_blocks"] == (0 if style else 1)
-                assert run["appearance_style_blocks"] == (1 if style else 0)
-                if name in {"new_bad_action", "new_neighbor_action"}:
-                    assert run["last_cutscene_guide_failure"] == 4
-                if name in {"new_null_action", "new_unreadable_action"}:
-                    assert run["last_cutscene_guide_failure"] == 3
-            assert obj["npc_dialogue"]["accepted"] == 0
+            assert obj["status"]=="active" and r["native_profile"]==1
+            assert d["enabled"]==(0 if name in {"resilience_dialogue","resilience_input_guard","resilience_both_optional"} else 1)
+            assert q["enabled"]==(0 if name in {"resilience_sequence","resilience_input_guard","resilience_both_optional"} else 1)
+            assert r["input_hook_enabled"]==(0 if name in {"resilience_input_guard","resilience_both_optional"} else 1)
+            layout=[r[k] for k in ("keyguide_action_offset","keyguide_family_offset","keyguide_subtype_offset")]
+            assert layout==([0x1D8,0x1E0,0x1E1] if name=="adaptive_layout" else [0x1E8,0x1F0,0x1F1])
+            if name in {"new_success","new_input_changed","adaptive_layout","resilience_input_guard"}:
+                assert run["appearance_repairs"]==run["native_style_state_verified"]==51
+                assert run["preactivation_unlocks"]==run["initial_input_shows"]==run["interaction_disable_cleanup"]==51
+                assert run["appearance_view_blocks"]==run["safety_gate_blocks"]==1
+                assert (run["last_input_family"],run["last_input_subtype"])==(1,2)
+                assert q["mode_0_prompt_repairs"]==q["mode_2_prompt_repairs"]==(0 if name=="resilience_input_guard" else 1)
+            elif name=="new_pause_hidden":
+                assert run["appearance_repairs"]==run["native_style_state_verified"]==1
+                assert run["safety_gate_blocks"]==0
+            elif name.startswith("new_"):
+                assert run["appearance_repairs"]==run["native_style_state_verified"]==0
+                assert run["safety_gate_blocks"]==1
+                style=name=="new_style_guard"
+                assert run["appearance_view_blocks"]==(0 if style else 1)
+                assert run["appearance_style_blocks"]==(1 if style else 0)
+            if name in {"modern_success","modern_events","modern_budget","resilience_sequence"}:
+                assert d["accepted"]==d["completion_paths"]==1
+                assert d["progression_steps"]==(399 if name=="modern_budget" else 11)
+                assert d["guard_blocks"]==d["stalls"]==0
+            if name=="modern_choice":
+                assert d["choice_stops"]==1 and d["completion_paths"]==0
+            if name in {"modern_stale","modern_changed","modern_waiting","modern_cache_empty","modern_cache_count","modern_cache_unreadable"}:
+                assert d["accepted"]==d["progression_steps"]==d["completion_paths"]==0
+            if name in {"route_mode0","route_mode2","resilience_dialogue"}:
+                assert q["hold_completions_forwarded"]==q["mode_changes_after_native_input"]==1
+                assert d["accepted"]==0
+            if name in {"route_no_actor","route_type_rejected"}:
+                assert q["hold_completions_forwarded"]==1 and q["mode_changes_after_native_input"]==0
+            if name in {"route_hidden","route_inactive","route_paused","route_wrong_state"}:
+                assert q["hold_completions_forwarded"]==0
         print(f"PASS {len(reports)} updated-executable JSON/log pairs; build ID, layout, identity guards, native repairs and fail-closed results verified")
         return
     results = {p.parent.name: json.loads(p.read_text())["npc_dialogue"] for p in reports if p.parent.name in npc}

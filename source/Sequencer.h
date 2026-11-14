@@ -17,14 +17,18 @@ inline bool sequencerReferences(const Image&im,U32 r,const DialoguePattern&p,Seq
 
 inline bool resolveSequencer3479(const Image&im,const DialogueResolved&dialogue,SequencerResolved&z){
     z=SequencerResolved{};
-    if(!dialogue.ready){z.failure="updated dialogue input not verified";return false;}
+    if(!dialogue.inputReady){z.failure="shared native input hook not verified";return false;}
     z.skip=unique(im,NewSequenceSkipSignature);
     z.finish=unique(im,NewSequenceFinishSignature);
+    U32 patchSkip=unique(im,PatchSequenceSkipSignature),patchFinish=unique(im,PatchSequenceFinishSignature);
+    bool patch=patchSkip&&patchFinish;
+    if(patch){if(z.skip||z.finish){z.failure="multiple sequencer profiles match";return false;}
+        z.skip=patchSkip;z.finish=patchFinish;}
     U32 helper=unique(im,NewSequenceHelperSignature);
     if(!z.skip||!z.finish||!helper){z.failure="updated sequencer shapes absent or ambiguous";return false;}
     // The updated input now calls a native actor-acquisition helper rather than
     // calling the sequence endpoint directly. Both links must match.
-    if(!newCall(im,dialogue.input,0x192,helper)||!newCall(im,helper,0x6A,z.skip)){
+    if(!newCall(im,dialogue.inputSkip,42,helper)||dialogue.inputHelper!=helper||!newCall(im,helper,0x6A,z.skip)){
         z.failure="updated sequencer input/actor helper call chain changed";return false;
     }
     U32 state=relative(im,z.skip,0x1D7,0x1DB);
@@ -80,7 +84,7 @@ struct Sequencer {
     void count(U32&v){__atomic_fetch_add(&v,1,__ATOMIC_RELAXED);__atomic_store_n(&dirty,1,__ATOMIC_RELEASE);}
     static U32 slot(U8 mode){return mode<=4?mode:5;}
     static bool supported(U8 mode){return mode==0||mode==2;}
-    bool active()const{return dialogue&&dialogue->active()&&resolved.ready;}
+    bool active()const{return dialogue&&(dialogue->active()||__atomic_load_n(&dialogue->inputEnabled,__ATOMIC_ACQUIRE))&&resolved.ready;}
     SequencerStats snapshot()const{
         SequencerStats s;
 #define GET(f) s.f=__atomic_load_n(&counters.f,__ATOMIC_RELAXED)

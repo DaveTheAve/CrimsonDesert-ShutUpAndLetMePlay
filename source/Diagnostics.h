@@ -11,6 +11,7 @@ struct DiagnosticSnapshot {
     DialogueStats dialogue;
     SequencerStats sequencer;
     bool sequencerEnabled=false;
+    bool sharedInputEnabled=false;
     bool dialogueEnabled=false;
     bool available = false;
     U32 uiThread = 0;
@@ -159,6 +160,13 @@ struct Diagnostics {
         field("appear_style_global_rva", resolved.symbols[Sym_AppearStyle]);
         field("disappear_style_global_rva", resolved.symbols[Sym_DisappearStyle]);
         field("native_profile",resolved.profile);
+        field("native_input_rva",resolved.nativeInput);
+        field("native_input_size",resolved.nativeInputSize);
+        field("native_skip_helper_rva",resolved.skipHelper);
+        field("input_hook_validated",npc.inputReady||npc.ready);
+        field("input_hook_enabled",snap.sharedInputEnabled);
+        state("dialogue_cache_layout",npc.ready?I32(npc.cacheLayout):-1);
+        state("dialogue_update_stolen_bytes",npc.ready?I32(npc.updateLength):-1);
         field("keyguide_binding_rva",resolved.guideBinding);
         field("keyguide_refresh_rva",resolved.guideRefresh);
         field("keyguide_action_offset",resolved.guideActionOffset);
@@ -244,6 +252,7 @@ struct Diagnostics {
         add("\nKeyguide action offset: ");hex(resolved.guideActionOffset);
         add("\nPrevious diagnostic write errors: "); number(priorErrors);
         add("\nLast diagnostic write error: "); number(priorError);
+        add("\nShared input hook: ");add(snap.sharedInputEnabled?"enabled":"disabled");
         add("\nNPC dialogue feature: ");add(snap.dialogueEnabled?"enabled":"disabled");
         add("\nNPC dialogue requests accepted: ");number(d.accepted);
         add("\nNPC dialogue progression steps: ");number(d.steps);

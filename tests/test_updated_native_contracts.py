@@ -16,9 +16,10 @@ class UpdatedNativeContracts(unittest.TestCase):
     def test_reference_file_and_profiles(self):
         manifest = json.loads((ROOT/'tests/reference.json').read_text())
         profiles = [manifest] + manifest['additional_references']
-        self.assertEqual([p['file_version'] for p in profiles], ['1.0.0.2944','1.0.0.2949','1.0.0.3479'])
+        self.assertEqual([p['file_version'] for p in profiles], ['1.0.0.2944','1.0.0.2949','1.0.0.3479','1.0.0.3663'])
         self.assertEqual(profiles[-1]['profile'], 'refactored')
-        self.assertEqual(profiles[-1]['executable_sha256'], 'df531a585bf84ceb47779304cc8b3caaf976aea88424c32605885623cd4519c7')
+        self.assertEqual(profiles[-2]['executable_sha256'], 'df531a585bf84ceb47779304cc8b3caaf976aea88424c32605885623cd4519c7')
+        self.assertEqual(profiles[-1]['executable_sha256'], '8be67178d9b9a149c361a731051665e0ba4d441e250ae1dfe645bd6e524345c8')
         self.assertEqual(len(profiles[-1]['functions']),14)
 
     def test_updated_masked_shapes_have_complete_matching_lengths(self):
@@ -60,7 +61,7 @@ class UpdatedNativeContracts(unittest.TestCase):
         m=re.search(r'NewInputTrampolineUnwind\[16\]\s*=\s*\{([^}]+)\}',info,re.S)
         self.assertTrue(m)
         values=[int(v,0) for v in re.findall(r'0x[0-9a-fA-F]+|\d+',m.group(1))]
-        self.assertEqual(values,[1,15,6,0,15,0xC0,13,0x70,12,0x60,11,0x50,5,0x34,8,0])
+        self.assertEqual(values,[1,15,6,0,15,0x34,8,0,15,0xC0,13,0x70,12,0x60,11,0x50])
 
     def test_cutscene_pause_wrapper_may_be_hidden(self):
         behavior = (ROOT/'source/Behavior.h').read_text()
@@ -99,7 +100,7 @@ class UpdatedNativeContracts(unittest.TestCase):
 
     def test_current_harness_initializes_bindings_through_native_methods(self):
         text=(ROOT/'tests/updated_compiled_harness.cpp').read_text()
-        self.assertIn('((Bind)(base+0xE434C0))',text)
+        self.assertIn('((Bind)(base+behavior.resolved.guideBinding))',text)
         self.assertIn('CHECK(nativeBindingLookups==lookups+2)',text)
         self.assertNotIn('mockSetAppearance',text)
         self.assertIn('new_bad_action',text)
