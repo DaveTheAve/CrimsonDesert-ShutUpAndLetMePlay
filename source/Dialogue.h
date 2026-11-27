@@ -67,7 +67,16 @@ struct Dialogue {
         U32 id=u32((U8*)ctx+4),index=u32((U8*)ctx+8);
         if(index>65535)return nullptr;
         void*database=nullptr;
-        if(resolved.cacheLayout==1){
+        if(resolved.cacheLayout==2){
+            // 3840: 48-byte entries; a non-null +0x20 is an already-loaded
+            // database. Unloaded entries stay ineligible: never load here.
+            if(!ok(store,0x28))return nullptr;
+            U32 count=u32((U8*)store+0x20);
+            if(count>1000000||id>=count)return nullptr;
+            U8*entries=(U8*)ptr(store,0x18);
+            if(!ok(entries,count*48))return nullptr;
+            database=ptr(entries+id*48,0x20);
+        }else if(resolved.cacheLayout==1){
             if(!ok(store,0x30))return nullptr;
             U32 count=u32((U8*)store+0x28);
             if(count>1000000||id>=count)return nullptr;

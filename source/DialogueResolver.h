@@ -2,6 +2,7 @@
 #include "Resolver.h"
 #include "DialogueSignatures.h"
 #include "New3663Signatures.h"
+#include "New3840Signatures.h"
 namespace crimson {
 // These prologues contain no RIP-relative instructions. Each trampoline copies
 // complete instructions and has its own unwind description; the native body keeps its
@@ -77,6 +78,19 @@ inline bool validateCacheGetter3663(const Image&im,U32 r){
         relative(im,r,0x60,0x64)==fallback;
 }
 
+// 3840: one exact getter shape and unwind record. Store, getter and fallback
+// record must agree at the Current, Finish and Advance call sites. The mod's
+// reader observes only already-loaded entries and never calls this loader.
+inline bool validateCacheGetter3840(const Image&im,U32 getter,U32 current,U32 finish,U32 advance,U32&store){
+    if(!im.code(getter,Dlg3840GetterSignature.size)||!masked(im.base+getter,Dlg3840GetterSignature)||
+       !newUnwind(im,getter,Dlg3840GetterSignature.size,Dlg3840GetterUnwind,sizeof(Dlg3840GetterUnwind)))return false;
+    store=relative(im,current,0xF,0x13);
+    U32 fallback=relative(im,current,0x1B,0x1F);
+    return store&&fallback&&store!=fallback&&im.accessible(store,8)&&im.accessible(fallback,8)&&
+        newCall(im,current,0x13,getter)&&newCall(im,finish,0x2E,getter)&&newCall(im,advance,0x3A,getter)&&
+        relative(im,finish,0x2A,0x2E)==store&&relative(im,advance,0x36,0x3A)==store&&
+        relative(im,finish,0x36,0x3A)==fallback&&relative(im,advance,0x42,0x46)==fallback;
+}
 inline bool resolveDialogue3479(const Image&im,const Resolved&core,DialogueResolved&z){
     z=DialogueResolved{};
     if(core.profile!=1){z.failure="updated dialogue profile not active";return false;}
@@ -84,28 +98,38 @@ inline bool resolveDialogue3479(const Image&im,const Resolved&core,DialogueResol
     z.inputReady=validateSharedInput(im,core);
     if(!z.inputReady){z.failure="shared input event guards or hook ABI changed; cutscene route retained";return false;}
     U32 legacyUpdate=unique(im,NewUpdateSignature),patchUpdate=unique(im,PatchUpdateSignature);
-    if((legacyUpdate!=0)==(patchUpdate!=0)){
+    U32 update3840=unique(im,Dlg3840UpdateSignature);
+    if((legacyUpdate!=0)+(patchUpdate!=0)+(update3840!=0)!=1){
         z.failure="interaction update absent or ambiguous; independent routes retained";return false;
     }
-    const bool patch=patchUpdate!=0;
-    z.cacheLayout=patch?1:0;z.update=patch?patchUpdate:legacyUpdate;
-    z.updateEntry=patch?PatchUpdateBytes:NewUpdateBytes;
+    const bool patch=patchUpdate!=0,build3840=update3840!=0;
+    z.cacheLayout=patch?1:(build3840?2:0);z.update=patch?patchUpdate:(build3840?update3840:legacyUpdate);
+    // 3840 restored the 3479 entry: only home-slot stores precede byte 15.
+    z.updateEntry=patch?PatchUpdateBytes:(build3840?Dlg3840UpdateBytes:NewUpdateBytes);
     z.updateUnwind=patch?PatchUpdateTrampolineUnwind:NewUpdateTrampolineUnwind;
     z.updateLength=patch?16:15;
-    z.advance=unique(im,patch?PatchAdvanceSignature:NewAdvanceSignature);
-    z.current=unique(im,patch?PatchCurrentSignature:NewCurrentSignature);
-    z.finish=unique(im,patch?PatchFinishSignature:NewFinishSignature);
+    z.advance=unique(im,patch?PatchAdvanceSignature:(build3840?Dlg3840AdvanceSignature:NewAdvanceSignature));
+    z.current=unique(im,patch?PatchCurrentSignature:(build3840?Dlg3840CurrentSignature:NewCurrentSignature));
+    z.finish=unique(im,patch?PatchFinishSignature:(build3840?Dlg3840FinishSignature:NewFinishSignature));
     if(!z.advance||!z.current||!z.finish){z.failure="interaction native shapes absent or ambiguous";return false;}
-    U32 database=relative(im,z.current,patch?0xE:0xD,patch?0x12:0x11);
-    U32 finishDB=relative(im,z.finish,patch?0x3C:0x33,patch?0x40:0x37);
-    if(!database||database!=finishDB||
-       (patch?!validateCacheGetter3663(im,database):
-        (!im.code(database,NewDatabaseSignature.size)||!masked(im.base+database,NewDatabaseSignature)))){
-        z.failure="linked dialogue rule-cache getter no longer matches";return false;
+    U32 database=0,rule=0;
+    if(build3840){
+        database=relative(im,z.current,0x14,0x18);
+        if(!database||!validateCacheGetter3840(im,database,z.current,z.finish,z.advance,rule)){
+            z.failure="linked dialogue rule-cache getter no longer matches";return false;
+        }
+    }else{
+        database=relative(im,z.current,patch?0xE:0xD,patch?0x12:0x11);
+        U32 finishDB=relative(im,z.finish,patch?0x3C:0x33,patch?0x40:0x37);
+        if(!database||database!=finishDB||
+           (patch?!validateCacheGetter3663(im,database):
+            (!im.code(database,NewDatabaseSignature.size)||!masked(im.base+database,NewDatabaseSignature)))){
+            z.failure="linked dialogue rule-cache getter no longer matches";return false;
+        }
+        rule=relative(im,database,patch?0xA:0x1D,patch?0xE:0x21);
     }
     z.database=database;
     U32 world=relative(im,z.update,patch?0x5B:0x60,patch?0x5F:0x64);
-    U32 rule=relative(im,database,patch?0xA:0x1D,patch?0xE:0x21);
     U32 stop=relative(im,z.update,patch?0x82:0x87,patch?0x86:0x8B);
     U32 invalidKey=relative(im,z.update,patch?0x8F:0x94,patch?0x93:0x98);
     U32 finished=relative(im,z.update,patch?0x149:0x14E,patch?0x14D:0x152);
@@ -115,7 +139,8 @@ inline bool resolveDialogue3479(const Image&im,const Resolved&core,DialogueResol
        !newCall(im,z.update,patch?0xA1:0xA6,z.current)||
        !newCall(im,z.update,patch?0x117:0x11C,z.advance)||
        !newCall(im,z.update,patch?0x142:0x147,z.finish)||
-       (patch&&(!newCall(im,z.advance,0x39,database)||!newCall(im,z.advance,0x57,z.current)))){
+       (patch&&(!newCall(im,z.advance,0x39,database)||!newCall(im,z.advance,0x57,z.current)))||
+       (build3840&&!newCall(im,z.advance,0x67,z.current))){
         z.failure="interaction native call chain or data globals mismatch";return false;
     }
     z.symbols[DialogueSymWorld]=world;z.symbols[DialogueSymGame]=core.symbols[Sym_GameManager];
@@ -128,7 +153,15 @@ inline bool resolveDialogue3479(const Image&im,const Resolved&core,DialogueResol
     const U8 currentUw[]={1,6,2,0,6,0x32,2,0x30};
     const U8 finishUw[]={0x11,0x22,0x0a,0,0x22,0x01,0x2f,0,0x1b,0xf0,0x19,0xe0,0x17,0xd0,0x15,0xc0,0x13,0x70,0x12,0x60,0x11,0x50,0x10,0x30};
     const U8 databaseUw[]={0x11,0x18,0x0a,0,0x18,0x64,0x13,0,0x18,0x54,0x12,0,0x18,0x34,0x10,0,0x18,0xb2,0x14,0xf0,0x12,0xe0,0x10,0x70};
-    if(patch){
+    if(build3840){
+        if(!newUnwind(im,z.update,Dlg3840UpdateSignature.size,Dlg3840UpdateUnwind,sizeof(Dlg3840UpdateUnwind))||
+           !newUnwind(im,z.advance,Dlg3840AdvanceSignature.size,Dlg3840AdvanceUnwind,sizeof(Dlg3840AdvanceUnwind))||
+           !newUnwind(im,z.current,Dlg3840CurrentSignature.size,Dlg3840CurrentUnwind,sizeof(Dlg3840CurrentUnwind))||
+           !newUnwind(im,z.finish,Dlg3840FinishSignature.size,Dlg3840FinishUnwind,sizeof(Dlg3840FinishUnwind))||
+           !same(Dlg3840UpdateBytes,NewUpdateBytes,15)){
+            z.failure="3840 interaction unwind or function boundaries changed";return false;
+        }
+    }else if(patch){
         if(!newUnwind(im,z.update,PatchUpdateSignature.size,PatchUpdateUnwind,sizeof(PatchUpdateUnwind))||
            !newUnwind(im,z.advance,PatchAdvanceSignature.size,PatchAdvanceUnwind,sizeof(PatchAdvanceUnwind))||
            !newUnwind(im,z.current,PatchCurrentSignature.size,PatchCurrentUnwind,sizeof(PatchCurrentUnwind))||

@@ -291,6 +291,86 @@
           "sha256": "ebadd11c3791375c23ca343c34483ecf0c81fa2616b69f01c3a4f26e8a64b975"
         }
       }
+    },
+    {
+      "file_version": "1.0.0.3840",
+      "executable_sha256": "ea2d84d947521332b002359818960ffd97765f37b447503d8a1efad4040269c8",
+      "timestamp": "0x6b07e5e9",
+      "image_size": "0x13d05000",
+      "profile": "refactored",
+      "scenarios": "modern_scenarios_3840.json",
+      "functions": {
+        "Interaction": {
+          "rva": "0x12cdc70",
+          "length": 506,
+          "sha256": "0ba3fa1908726a5c7ab48e3a74c853229804a1451fb2609b6666c7e6d779a50b"
+        },
+        "Appearance": {
+          "rva": "0x12cda00",
+          "length": 617,
+          "sha256": "fcfb3181e7f64e28f4cd6076ddebddea3f2b06df157f2d39719ad69f2887b0a2"
+        },
+        "SetAppearance": {
+          "rva": "0xedc6f0",
+          "length": 459,
+          "sha256": "b5b721ea33582d46d74f6346830f47182390d9ce846c2ccf8d5eae10fa45fc4b"
+        },
+        "Input": {
+          "rva": "0x12c8330",
+          "length": 2788,
+          "sha256": "7331d49e8bc19f208700764ef1475a3ed195789c0bb7bb556656ac74158a9ba9"
+        },
+        "Update": {
+          "rva": "0x6d4030",
+          "length": 2539,
+          "sha256": "701463c838d1dd3400c5686926da348feb7bfe49f3a03ce277b856367d392a12"
+        },
+        "Advance": {
+          "rva": "0x6d1a30",
+          "length": 4849,
+          "sha256": "1bb1859c4628d77af18a2e49ea9451ffc99531e2b0df69434bb5fc54b8d3d23a"
+        },
+        "Current": {
+          "rva": "0x6d3f00",
+          "length": 301,
+          "sha256": "f31d47b4a6adca24c299f4ea38e85d69c6b9c8f750bac5814ca76825ba9abc13"
+        },
+        "Finish": {
+          "rva": "0x6d2d80",
+          "length": 900,
+          "sha256": "28c819debd722cfa93e50440b38b894d02c2eba00dabb828249d05ae16a9303a"
+        },
+        "Database": {
+          "rva": "0x6e1510",
+          "length": 326,
+          "sha256": "c3392fb34f3a007d8a8a08b3df3b970c0bbe8d03e3819d269ca580788740e505"
+        },
+        "SequenceSkip": {
+          "rva": "0xc28230",
+          "length": 705,
+          "sha256": "a542c77d6a0064c82e788e41a63d04a1a7bf3ef829a24b379f5deab063d605c2"
+        },
+        "SequenceFinish": {
+          "rva": "0xc28500",
+          "length": 808,
+          "sha256": "3a4de2926bef4e165fa73f941d93a88fc4c1e82599834580ac005065558e723a"
+        },
+        "SequenceHelper": {
+          "rva": "0x79f110",
+          "length": 330,
+          "sha256": "4c2dea9b9ae81a21559a8fc38d63d28bb875dd4db4ec917c837240149bc0ac76"
+        },
+        "GuideBinding": {
+          "rva": "0xede9e0",
+          "length": 466,
+          "sha256": "b7d7d6c0d55900240d1532d366c30e42dc2d98eb0158d9d5cf5172edb08f1a5d"
+        },
+        "GuideRefresh": {
+          "rva": "0xede620",
+          "length": 432,
+          "sha256": "7146ad63c2483266ed0ac0834f4610dc6e41e8acf97c066b68e53016ae2933ba"
+        }
+      }
     }
   ]
 }

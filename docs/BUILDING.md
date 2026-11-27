@@ -39,7 +39,7 @@ bash tests/run_tests.sh "/outside/the/source/CrimsonDesert.exe"
 
 The script verifies the executable hash before executing isolated reviewed
 routines. It never calls the game's entry point. Reference file version:
-**1.0.0.2944**, **1.0.0.2949**, **1.0.0.3479**, or **1.0.0.3663**. The original reference SHA-256 is:
+**1.0.0.2944**, **1.0.0.2949**, **1.0.0.3479**, **1.0.0.3663**, or **1.0.0.3840**. The original reference SHA-256 is:
 
 `6d348be9d52f81bd35cf7c55e73a5dbfc96cc8268438387c91f7f62c82381fa7`
 
@@ -78,8 +78,8 @@ ZIP goes into the game directory.
 
 ## Modern executable regression coverage
 
-The 3479 and 3663 references run the scenario list in `tests/modern_scenarios.json` through `updated_compiled_harness.cpp`. Keyguides are initialized by the executable's native binding/cache methods. The modern fixture executes native cutscene input and appearance, dialogue progression, and choice-wait paths; final rendering, voice and actor/quest recipients remain mocks. The two older references use the existing isolation suite.
+The 3479 and 3663 references run the scenario list in `tests/modern_scenarios.json` through `updated_compiled_harness.cpp`. The 3840 reference runs `tests/modern_scenarios_3840.json`: the same scenarios plus 3840 cache-getter, cache-link and sequencer-ambiguity faults, executing its new thread-checked rule-cache getter. Keyguides are initialized by the executable's native binding/cache methods. The modern fixture executes native cutscene input and appearance, dialogue progression, and choice-wait paths; final rendering, voice and actor/quest recipients remain mocks. The two older references use the existing isolation suite.
 
-`New3479Signatures.h` and `New3663Signatures.h` contain reviewed native patterns. Modern cutscene startup validates the native Skip action and its owning function rather than requiring unrelated input-handler branches to remain byte-identical. Shared input-hook validation and the interaction-update resolver are separate. `Resolver.h` derives limited keyguide field shifts only when the matching native setter and reader agree. No fuzzy matching or runtime instruction guessing is used.
+`New3479Signatures.h`, `New3663Signatures.h` and `New3840Signatures.h` contain reviewed native patterns. Modern cutscene startup validates the native Skip action and its owning function rather than requiring unrelated input-handler branches to remain byte-identical. Shared input-hook validation and the interaction-update resolver are separate. `Resolver.h` derives limited keyguide field shifts only when the matching native setter and reader agree. No fuzzy matching or runtime instruction guessing is used.
 
 The current dialogue-update trampoline copies 16 complete instruction bytes and registers its own partial-prologue unwind record. Unit tests model register/stack recovery; a real Windows `RtlVirtualUnwind` execution remains outside this Linux suite.

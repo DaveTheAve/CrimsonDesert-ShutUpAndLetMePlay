@@ -10,6 +10,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
     parser.add_argument("--updated", action="store_true", help="Validate the modern native keyguide, dialogue, sequence and resilience scenarios")
+    parser.add_argument("--scenarios", type=Path, help="Scenario list for --updated (default: tests/modern_scenarios.json)")
     args = parser.parse_args()
     header = (Path(__file__).resolve().parent.parent / "source/Version.h").read_text()
     version = re.search(r'#define\s+SULMP_VERSION\s+"([0-9.]+)"', header).group(1)
@@ -27,7 +28,7 @@ def main() -> None:
                  "image_unsorted_unwind", "image_many_sections"}
     expected |= npc | seq
     if args.updated:
-        expected=set(json.loads((Path(__file__).resolve().parent/'modern_scenarios.json').read_text()))
+        expected=set(json.loads((args.scenarios or Path(__file__).resolve().parent/'modern_scenarios.json').read_text()))
     assert {p.parent.name for p in reports} == expected, "Missing/unexpected diagnostic test scenarios"
     for path in reports:
         obj = json.loads(path.read_text(encoding="utf-8"))
@@ -102,8 +103,12 @@ def main() -> None:
                 assert run["interaction_calls"]==run["appearance_calls"]==0
                 continue
             assert obj["status"]=="active" and r["native_profile"]==1
-            assert d["enabled"]==(0 if name in {"resilience_dialogue","resilience_input_guard","resilience_both_optional"} else 1)
-            assert q["enabled"]==(0 if name in {"resilience_sequence","resilience_input_guard","resilience_both_optional"} else 1)
+            no_sequence={"resilience_sequence","resilience_input_guard","resilience_both_optional","resilience_sequence_ambiguous"}
+            no_dialogue={"resilience_dialogue","resilience_input_guard","resilience_both_optional","resilience_getter_shape","resilience_cache_link"}
+            assert d["enabled"]==(0 if name in no_dialogue else 1)
+            if name in {"resilience_getter_shape","resilience_cache_link"}:
+                assert d["reason"]=="linked dialogue rule-cache getter no longer matches"
+            assert q["enabled"]==(0 if name in no_sequence else 1)
             assert r["input_hook_enabled"]==(0 if name in {"resilience_input_guard","resilience_both_optional"} else 1)
             layout=[r[k] for k in ("keyguide_action_offset","keyguide_family_offset","keyguide_subtype_offset")]
             assert layout==([0x1D8,0x1E0,0x1E1] if name=="adaptive_layout" else [0x1E8,0x1F0,0x1F1])
@@ -122,7 +127,7 @@ def main() -> None:
                 style=name=="new_style_guard"
                 assert run["appearance_view_blocks"]==(0 if style else 1)
                 assert run["appearance_style_blocks"]==(1 if style else 0)
-            if name in {"modern_success","modern_events","modern_budget","resilience_sequence"}:
+            if name in {"modern_success","modern_events","modern_budget","resilience_sequence","resilience_sequence_ambiguous"}:
                 assert d["accepted"]==d["completion_paths"]==1
                 assert d["progression_steps"]==(399 if name=="modern_budget" else 11)
                 assert d["guard_blocks"]==d["stalls"]==0
@@ -130,7 +135,7 @@ def main() -> None:
                 assert d["choice_stops"]==1 and d["completion_paths"]==0
             if name in {"modern_stale","modern_changed","modern_waiting","modern_cache_empty","modern_cache_count","modern_cache_unreadable"}:
                 assert d["accepted"]==d["progression_steps"]==d["completion_paths"]==0
-            if name in {"route_mode0","route_mode2","resilience_dialogue"}:
+            if name in {"route_mode0","route_mode2","resilience_dialogue","resilience_getter_shape","resilience_cache_link"}:
                 assert q["hold_completions_forwarded"]==q["mode_changes_after_native_input"]==1
                 assert d["accepted"]==0
             if name in {"route_no_actor","route_type_rejected"}:

@@ -1,6 +1,7 @@
 #pragma once
 #include "Dialogue.h"
 #include "SequencerSignatures.h"
+#include "New3840Signatures.h"
 namespace crimson {
 struct SequencerResolved {
     U32 skip=0,finish=0,symbols[SequencerSymbolCount]{};
@@ -21,9 +22,14 @@ inline bool resolveSequencer3479(const Image&im,const DialogueResolved&dialogue,
     z.skip=unique(im,NewSequenceSkipSignature);
     z.finish=unique(im,NewSequenceFinishSignature);
     U32 patchSkip=unique(im,PatchSequenceSkipSignature),patchFinish=unique(im,PatchSequenceFinishSignature);
-    bool patch=patchSkip&&patchFinish;
-    if(patch){if(z.skip||z.finish){z.failure="multiple sequencer profiles match";return false;}
-        z.skip=patchSkip;z.finish=patchFinish;}
+    // 3840 moved private sequence-object fields only. Its exact shape is a
+    // separate reviewed profile; any match from another profile is ambiguous.
+    U32 skip3840=unique(im,Seq3840SkipSignature),finish3840=unique(im,Seq3840FinishSignature);
+    bool patch=patchSkip&&patchFinish,build3840=skip3840&&finish3840;
+    if(patch||build3840){
+        if(z.skip||z.finish||(patch&&(skip3840||finish3840))||(build3840&&(patchSkip||patchFinish))){
+            z.failure="multiple sequencer profiles match";return false;}
+        z.skip=patch?patchSkip:skip3840;z.finish=patch?patchFinish:finish3840;}
     U32 helper=unique(im,NewSequenceHelperSignature);
     if(!z.skip||!z.finish||!helper){z.failure="updated sequencer shapes absent or ambiguous";return false;}
     // The updated input now calls a native actor-acquisition helper rather than

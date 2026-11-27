@@ -1,16 +1,16 @@
 {
   "title": "Shut Up and Let Me Play - An Actual Skip Button",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "summary": "Fast-forward is not skip. Restores native hold-to-skip for supported Crimson Desert gameplay cutscenes and NPC dialogue. No custom overlay, auto-skip, or remapping. Requires a compatible x64 ASI loader.",
   "game": "Crimson Desert",
-  "main_file": "ShutUpAndLetMePlay-2.0.3.zip",
-  "optional_source": "ShutUpAndLetMePlay-2.0.3-Source.zip",
-  "github_repository_files": "CrimsonDesert-ShutUpAndLetMePlay-2.0.3-GitHub.zip",
+  "main_file": "ShutUpAndLetMePlay-2.0.4.zip",
+  "optional_source": "ShutUpAndLetMePlay-2.0.4-Source.zip",
+  "github_repository_files": "CrimsonDesert-ShutUpAndLetMePlay-2.0.4-GitHub.zip",
   "required_disclosure_tags": [
     "AI-Generated Content",
     "AI Media"
   ],
-  "reference_executable_file_version": "1.0.0.3663",
+  "reference_executable_file_version": "1.0.0.3840",
   "external_requirement": "Compatible x64 ASI loader (not bundled)",
   "author_and_license": "MIT License",
   "github_url": "https://github.com/DaveTheAve/CrimsonDesert-ShutUpAndLetMePlay",
@@ -19,5 +19,5 @@
     "assets/Shut Up and Let Me Play - Header Image.png",
     "assets/Shut Up and Let Me Play - Title Image.png"
   ],
-  "nexus_publishing_kit": "ShutUpAndLetMePlay-2.0.3-Nexus-Publishing-Kit.zip"
+  "nexus_publishing_kit": "ShutUpAndLetMePlay-2.0.4-Nexus-Publishing-Kit.zip"
 }

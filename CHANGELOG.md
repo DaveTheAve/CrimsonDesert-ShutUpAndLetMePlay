@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.4 — 2026-11-27
+
+- Updated for game version 1.0.0.3840.
+
 ## 2.0.3 — 2026-11-13
 
 - Updated for game version 1.0.0.3663.

@@ -8,7 +8,7 @@ import re
 import zipfile
 from repository_files import inventory, MEDIA_FILES
 
-STAMP = (2026, 11, 13, 0, 0, 0)
+STAMP = (2026, 11, 27, 0, 0, 0)
 
 def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()

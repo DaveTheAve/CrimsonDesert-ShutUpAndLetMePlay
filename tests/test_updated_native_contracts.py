@@ -16,10 +16,13 @@ class UpdatedNativeContracts(unittest.TestCase):
     def test_reference_file_and_profiles(self):
         manifest = json.loads((ROOT/'tests/reference.json').read_text())
         profiles = [manifest] + manifest['additional_references']
-        self.assertEqual([p['file_version'] for p in profiles], ['1.0.0.2944','1.0.0.2949','1.0.0.3479','1.0.0.3663'])
+        self.assertEqual([p['file_version'] for p in profiles], ['1.0.0.2944','1.0.0.2949','1.0.0.3479','1.0.0.3663','1.0.0.3840'])
         self.assertEqual(profiles[-1]['profile'], 'refactored')
-        self.assertEqual(profiles[-2]['executable_sha256'], 'df531a585bf84ceb47779304cc8b3caaf976aea88424c32605885623cd4519c7')
-        self.assertEqual(profiles[-1]['executable_sha256'], '8be67178d9b9a149c361a731051665e0ba4d441e250ae1dfe645bd6e524345c8')
+        self.assertEqual(profiles[-3]['executable_sha256'], 'df531a585bf84ceb47779304cc8b3caaf976aea88424c32605885623cd4519c7')
+        self.assertEqual(profiles[-2]['executable_sha256'], '8be67178d9b9a149c361a731051665e0ba4d441e250ae1dfe645bd6e524345c8')
+        self.assertEqual(len(profiles[-2]['functions']),14)
+        self.assertEqual(profiles[-1]['executable_sha256'], 'ea2d84d947521332b002359818960ffd97765f37b447503d8a1efad4040269c8')
+        self.assertEqual(profiles[-1]['scenarios'], 'modern_scenarios_3840.json')
         self.assertEqual(len(profiles[-1]['functions']),14)
 
     def test_updated_masked_shapes_have_complete_matching_lengths(self):
