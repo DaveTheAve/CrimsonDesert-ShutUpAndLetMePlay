@@ -14,13 +14,41 @@ static void segvHandler(int signal,siginfo_t*info,void*ctx){
  void*bt[48];int count=backtrace(bt,48);backtrace_symbols_fd(bt,count,2);_exit(128+signal);
 }
 
-static bool modern3663=false;
+static bool modern3663=false,modern3840=false;
 static DialogueResolved actualDialogue;
 static SequencerResolved actualSequence;
 static U32 actualAppearance=0;
 // Reviewed reference-only helper RVAs for isolated mocks. Runtime resolution
 // never uses this table or an executable/version whitelist.
+static U32 referenceHelper3840(U32 old){
+    // Derived from the matching native call sites in the 3840 binding,
+    // refresh, style-setter, interaction and keyguide-reset routines.
+    switch(old){
+        case 0x149DE20:return 0x1568E50;
+        case 0x30C5540:return 0x328B250;
+        case 0x3D76C0:return 0x3E6C00;
+        case 0xE43F80:return 0xEDF4A0;
+        case 0x30B31F0:return 0x3278D40;
+        case 0x30C5C10:return 0x328B920;
+        case 0xE44E80:return 0xEE04D0;
+        case 0xE432B0:return 0xEDE7D0;
+        case 0xE433B0:return 0xEDE8D0;
+        case 0xE42F00:return 0xEDE420;
+        case 0x717660:return 0x77D3A0;
+        case 0xE41310:return 0xEDC8C0;
+        case 0xE42500:return 0xEDDAB0;
+        case 0x38933C0:return 0x3A72C70;
+        case 0x3896A70:return 0x3A76E70;
+        case 0x38974A0:return 0x3A77890;
+        case 0xE4A770:return 0xEE5BC0;
+        case 0xE434C0:return 0xEDE9E0;
+        case 0xE43100:return 0xEDE620;
+        case 0xE45D30:return 0xEE1380;
+        default:throw std::runtime_error("unknown isolated 3840 helper");
+    }
+}
 static U32 referenceHelper(U32 old){
+    if(modern3840)return referenceHelper3840(old);
     if(!modern3663)return old;
     switch(old){
         case 0x149DE20:return 0x14DE770;
@@ -112,6 +140,7 @@ static void bindUpdatedGuides(Fixture&f,U8 family=0,U8 subtype=0){
     }
 }
 static void testCurrentHooks(){
+    // 3840 has no validated interaction-update hook: cutscene pair + input.
     U32 hooks=scenario=="resilience_input_guard"?2u:4u;
     CHECK(virtualAllocations.size()==hooks&&registeredTables.size()==hooks);
     bool foundBranch=false;
@@ -255,9 +284,16 @@ int main(int argc,char**argv){try{
         scenario=="new_unreadable_action"||scenario=="new_neighbor_action"||
         scenario=="new_bad_guide_type"||scenario=="new_style_guard";
     bool modernNPC=scenario.rfind("modern_",0)==0||scenario=="resilience_sequence";
-    bool modernSEQ=scenario.rfind("route_",0)==0||scenario=="resilience_dialogue"||scenario=="resilience_both_optional";
+    // 3840-only cache faults: a changed getter, or a caller whose store
+    // operand disagrees, must disable interaction dialogue alone.
+    bool cacheFault=scenario=="resilience_getter_shape"||scenario=="resilience_cache_link";
+    bool dialogueOff=scenario=="resilience_dialogue"||cacheFault;
+    bool modernSEQ=scenario.rfind("route_",0)==0||dialogueOff||scenario=="resilience_both_optional";
     bool adaptive=scenario=="adaptive_layout";
-    U32 expectedHooks=scenario=="resilience_dialogue"?3:((scenario=="resilience_input_guard"||scenario=="resilience_both_optional")?2:4);
+    // A second exact 3840 sequence Skip shape: only that route is disabled.
+    bool sequenceAmbiguous=scenario=="resilience_sequence_ambiguous";
+    if(sequenceAmbiguous)modernNPC=true;
+    U32 expectedHooks=dialogueOff?3:((scenario=="resilience_input_guard"||scenario=="resilience_both_optional")?2:4);
     bool expectSuccess=modernNPC||modernSEQ||adaptive||scenario=="resilience_input_guard"||scenario=="new_input_changed"||scenario=="new_success"||scenario=="new_pause_hidden"||guarded;
     CHECK(expectSuccess||scenario=="new_shape"||scenario=="new_ambiguous"||
           scenario=="allocation"||scenario=="unwind"||scenario=="new_input_changed"||
@@ -271,11 +307,18 @@ int main(int argc,char**argv){try{
     CHECK(behavior.resolved.profile==1);
     DialogueResolved dr;
     SequencerResolved sr;
-    CHECK(resolveDialogue3479(behavior.image,behavior.resolved,dr));
+    // Test-only reference identity; run_tests.sh already verified the SHA-256.
+    // Production resolution never consults a timestamp or version whitelist.
+    modern3840=behavior.image.timestamp==0x6B07E5E9u&&behavior.image.size==0x13D05000u;
+    const bool npcResolved=resolveDialogue3479(behavior.image,behavior.resolved,dr);
+    CHECK(npcResolved);
     CHECK(resolveSequencer3479(behavior.image,dr,sr));
+    CHECK(modern3840==(dr.cacheLayout==2));
+    if(modern3840)CHECK(dr.update==0x6D4030u&&dr.advance==0x6D1A30u&&dr.current==0x6D3F00u&&dr.finish==0x6D2D80u&&dr.database==0x6E1510u&&dr.updateLength==15);
     modern3663=dr.cacheLayout==1;actualDialogue=dr;actualSequence=sr;
-    CHECK(behavior.resolved.interaction==(modern3663?0x124FDF0u:0x12145E0u));
-    CHECK(behavior.resolved.appearance==(modern3663?0x124FB80u:0x1214370u));
+    CHECK(behavior.resolved.interaction==(modern3840?0x12CDC70u:modern3663?0x124FDF0u:0x12145E0u));
+    CHECK(behavior.resolved.appearance==(modern3840?0x12CDA00u:modern3663?0x124FB80u:0x1214370u));
+    if(modern3840)CHECK(sr.skip==0xC28230u&&sr.finish==0xC28500u&&behavior.resolved.nativeInput==0x12C8330u);
     actualAppearance=behavior.resolved.appearance;
     actualSequencerState=sr.symbols[SequencerSymStateFacade];
     put32(base+behavior.resolved.symbols[Sym_AppearStyle],0x4321);
@@ -295,8 +338,16 @@ int main(int argc,char**argv){try{
     // Corrupt a validated native function or create an ambiguous code copy.
     // No hooks may install in either case, even when older signatures exist.
     if(scenario=="resilience_dialogue"||scenario=="resilience_both_optional")base[dr.update+0x40]^=1;
+    if(cacheFault)CHECK(modern3840);
+    if(scenario=="resilience_getter_shape")base[dr.database+0x40]^=1;
+    if(scenario=="resilience_cache_link")put32(base+dr.finish+0x2A,u32(base+dr.finish+0x2A)+8);
     if(scenario=="resilience_sequence"||scenario=="resilience_both_optional")base[sr.skip+0x50]^=1;
     if(scenario=="resilience_input_guard")base[dr.input+0x85]^=1;
+    if(sequenceAmbiguous){
+        // A second exact sequencer Skip shape must disable only that route.
+        U32 dup=0x13000000u;CHECK(modern3840&&behavior.image.code(dup,Seq3840SkipSignature.size));
+        std::memcpy(base+dup,base+sr.skip,Seq3840SkipSignature.size);
+    }
     if(scenario=="invalid_layout_bound"||scenario=="invalid_layout_alignment"){
         U32 action=scenario=="invalid_layout_bound"?0x208u:0x1E9u;
         put32(base+behavior.resolved.guideBinding+0x97,action);put32(base+behavior.resolved.guideRefresh+0xA9,action);
@@ -367,14 +418,14 @@ int main(int argc,char**argv){try{
     CHECK(report.find("\"keyguide_action_offset\": "+std::to_string(behavior.resolved.guideActionOffset))!=std::string::npos);
     CHECK(report.find("\"keyguide_family_offset\": "+std::to_string(behavior.resolved.guideFamilyOffset))!=std::string::npos);
     CHECK(report.find("\"keyguide_subtype_offset\": "+std::to_string(behavior.resolved.guideSubtypeOffset))!=std::string::npos);
-    if(scenario=="resilience_dialogue"){
+    if(dialogueOff){
         CHECK(report.find("\"input_hook_enabled\": 1")!=std::string::npos);
         CHECK(report.find("\"npc_dialogue\": {\n    \"enabled\": 0")!=std::string::npos);
         CHECK(report.find("\"sequencer_dialogue\": {\n    \"enabled\": 1")!=std::string::npos);
     }
     if(scenario=="resilience_input_guard"||scenario=="resilience_both_optional")
         CHECK(report.find("\"input_hook_enabled\": 0")!=std::string::npos);
-    if(scenario=="resilience_sequence"){
+    if(scenario=="resilience_sequence"||sequenceAmbiguous){
         CHECK(report.find("\"npc_dialogue\": {\n    \"enabled\": 1")!=std::string::npos);
         CHECK(report.find("\"sequencer_dialogue\": {\n    \"enabled\": 0")!=std::string::npos);
     }

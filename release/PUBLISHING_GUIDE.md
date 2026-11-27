@@ -1,15 +1,15 @@
 # Nexus publishing kit
 
-Version: **2.0.3**
+Version: **2.0.4**
 
 Title: **Shut Up and Let Me Play - An Actual Skip Button**
 
 Pitch: **Actual native skipping for supported gameplay cutscenes and NPC dialogue. Fast-forward remains a different verb.**
 
-Main file: `ShutUpAndLetMePlay-2.0.3.zip`  
-Optional developer download: `ShutUpAndLetMePlay-2.0.3-Source.zip`
+Main file: `ShutUpAndLetMePlay-2.0.4.zip`  
+Optional developer download: `ShutUpAndLetMePlay-2.0.4-Source.zip`
 
-Publishing kit: `ShutUpAndLetMePlay-2.0.3-Nexus-Publishing-Kit.zip`
+Publishing kit: `ShutUpAndLetMePlay-2.0.4-Nexus-Publishing-Kit.zip`
 
 This kit is page/support copy and artwork, not an installable mod.
 

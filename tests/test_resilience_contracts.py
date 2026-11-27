@@ -26,6 +26,48 @@ class ResilienceContracts(unittest.TestCase):
                 self.assertEqual(set(mask),{0,255})
                 self.assertGreater(mask.count(255),length*3//4)
 
+    def test_all_3840_shapes_have_full_length_masks(self):
+        source='source/New3840Signatures.h'
+        shapes={'Dlg3840Update':2539,'Dlg3840Advance':4849,'Dlg3840Current':301,'Dlg3840Finish':900,'Dlg3840Getter':326}
+        for name,length in shapes.items():
+            with self.subTest(name=name):
+                code=array(source,name+'Bytes');mask=array(source,name+'Mask')
+                self.assertEqual((len(code),len(mask)),(length,length))
+                self.assertEqual(set(mask),{0,255})
+                self.assertGreater(mask.count(255),length*3//4)
+        # Sequencer 3840 keeps the reviewed 3663 masks; only private fields moved.
+        for name,length in {'Skip':705,'Finish':808}.items():
+            with self.subTest(name='Seq3840'+name):
+                self.assertEqual(len(array(source,'Seq3840'+name+'Bytes')),length)
+                self.assertIn('Seq3840'+name+'Bytes,PatchSequence'+name+'Mask',(ROOT/source).read_text())
+
+    def test_3840_update_entry_reuses_home_slot_trampoline(self):
+        code=array('source/New3840Signatures.h','Dlg3840UpdateBytes')
+        legacy=array('source/New3479Signatures.h','NewUpdateBytes')
+        # mov rax,rsp; three home-slot stores. No RSP move, push or RIP operand.
+        self.assertEqual(code[:15],bytes.fromhex('48 8b c4 48 89 58 10 4c 89 48 20 4c 89 40 18'))
+        self.assertEqual(code[:15],legacy[:15])
+        self.assertEqual(code[15],0x55)
+        text=(ROOT/'source/DialogueResolver.h').read_text()
+        self.assertIn('z.updateUnwind=patch?PatchUpdateTrampolineUnwind:NewUpdateTrampolineUnwind;',text)
+        self.assertIn('!same(Dlg3840UpdateBytes,NewUpdateBytes,15)',text)
+
+    def test_3840_cache_reader_never_invokes_loader(self):
+        text=(ROOT/'source/Dialogue.h').read_text()
+        branch=text.split('if(resolved.cacheLayout==2){',1)[1].split('}else if',1)[0]
+        self.assertIn('u32((U8*)store+0x20)',branch)
+        self.assertIn('ptr(store,0x18)',branch)
+        self.assertIn('ok(entries,count*48)',branch)
+        self.assertIn('ptr(entries+id*48,0x20)',branch)
+        # Plain bounded reads only: no native getter, symbol or call is used.
+        self.assertNotIn('symbols[',branch)
+        self.assertNotIn('resolved.database',text)
+        resolver=(ROOT/'source/DialogueResolver.h').read_text()
+        for needle in ('newCall(im,current,0x13,getter)','newCall(im,finish,0x2E,getter)','newCall(im,advance,0x3A,getter)',
+                       'relative(im,finish,0x2A,0x2E)==store','relative(im,advance,0x36,0x3A)==store',
+                       'relative(im,finish,0x36,0x3A)==fallback','relative(im,advance,0x42,0x46)==fallback'):
+            self.assertIn(needle,resolver)
+
     def test_update_trampoline_copies_complete_push_instruction(self):
         code=array('source/New3663Signatures.h','PatchUpdateBytes')
         self.assertEqual(code[:16],bytes.fromhex('48 8b c4 48 89 58 10 4c 89 48 20 55 56 57 41 54'))

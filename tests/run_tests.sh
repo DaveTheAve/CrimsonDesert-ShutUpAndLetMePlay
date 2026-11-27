@@ -25,19 +25,22 @@ with open(sys.argv[2], 'rb') as executable:
 matches = [r for r in known if r['executable_sha256'] == digest.hexdigest()]
 if len(matches) != 1:
     raise SystemExit('Isolation tests require an exact executable listed in tests/reference.json.')
-print(matches[0].get('profile','original'))
+match = matches[0]
+print(match.get('profile','original'), match.get('scenarios','modern_scenarios.json'))
 PYREF
 )"
+read -r PROFILE SCENARIOS <<<"$PROFILE"
 printf 'Verified isolation-test reference: %s\n' "$PROFILE"
 BUILD="$(mktemp -d)"
 trap 'rm -rf -- "$BUILD"' EXIT
 if [[ "$PROFILE" == "refactored" ]]; then
   g++ -std=c++17 -O2 -Wall -Wextra -Werror -Wno-misleading-indentation -Wno-unused-function \
     "$ROOT/tests/updated_compiled_harness.cpp" -o "$BUILD/updated_compiled_harness"
-  for scenario in $(python3 -c 'import json,sys;print(" ".join(json.load(open(sys.argv[1]))))' "$ROOT/tests/modern_scenarios.json"); do
+  for scenario in $(python3 -c 'import json,sys;print(" ".join(json.load(open(sys.argv[1]))))' "$ROOT/tests/$SCENARIOS"); do
     "$BUILD/updated_compiled_harness" "$1" "$ROOT/ShutUpAndLetMePlay.asi" "$scenario" "$BUILD/reports"
   done
-  python3 "$ROOT/tests/validate_reports.py" "$BUILD/reports" --updated
+  VALIDATE=("$ROOT/tests/validate_reports.py" "$BUILD/reports" --updated --scenarios "$ROOT/tests/$SCENARIOS")
+  python3 "${VALIDATE[@]}"
   printf 'PASS updated native image and compiled-ASI isolation; no full game launched.\n'
   exit 0
 fi

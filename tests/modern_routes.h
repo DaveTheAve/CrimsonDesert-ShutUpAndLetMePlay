@@ -23,7 +23,8 @@ struct ModernDialogueFixture {
     std::array<U8,0x70*200>entries{};
     std::array<U8,0x30*3>lines{};
     std::array<U8,24*16>journal{};
-    std::array<U8,24>cache{};
+    std::array<U8,48>cache{};
+    std::array<U8,0x40>cacheOwner{};
     U32 result=999;
     explicit ModernDialogueFixture(U32 count=3):ui(3){
         regions.push_back({(U8*)this,sizeof(*this)});
@@ -35,7 +36,12 @@ struct ModernDialogueFixture {
         set(ui.manager.data(),0x90,state.data());
         set(state.data(),0x1228,voice.data());state[0x10B6]=3;
         set(base,actualDialogue.symbols[DialogueSymRuleStore],store.data());
-        if(modern3663){set(store.data(),0x20,cache.data());put32(store.data()+0x28,1);set(cache.data(),8,database.data());}
+        if(modern3840){
+            // 3840 getter(store,id): owner allows this thread (+0x19) and
+            // takes the direct, non-loading path (+0x18 clear). Entry +0x20.
+            set(store.data(),8,cacheOwner.data());cacheOwner[0x19]=1;
+            set(store.data(),0x18,cache.data());put32(store.data()+0x20,1);set(cache.data(),0x20,database.data());
+        }else if(modern3663){set(store.data(),0x20,cache.data());put32(store.data()+0x28,1);set(cache.data(),8,database.data());}
         else{set(store.data(),0x58,cache.data());put32(store.data()+8,1);set(cache.data(),0,database.data());}
         set(database.data(),0x110,record.data());put32(database.data()+0x118,1);put32(database.data()+0x11C,1);
         set(record.data(),0x48,entries.data());put32(record.data()+0x50,count);put32(record.data()+0x54,count);
@@ -55,19 +61,22 @@ struct ModernDialogueFixture {
 };
 static void testModernDialogue(){
     prepareNativeKeyguides();
-    for(auto r:{std::pair<U32,U32>{actualDialogue.update,modern3663?PatchUpdateSignature.size:NewUpdateSignature.size},
-         {actualDialogue.advance,modern3663?PatchAdvanceSignature.size:NewAdvanceSignature.size},
-         {actualDialogue.current,modern3663?PatchCurrentSignature.size:NewCurrentSignature.size},
-         {actualDialogue.database,modern3663?PatchDatabaseSignature.size:NewDatabaseSignature.size}})
+    for(auto r:{std::pair<U32,U32>{actualDialogue.update,modern3840?Dlg3840UpdateSignature.size:modern3663?PatchUpdateSignature.size:NewUpdateSignature.size},
+         {actualDialogue.advance,modern3840?Dlg3840AdvanceSignature.size:modern3663?PatchAdvanceSignature.size:NewAdvanceSignature.size},
+         {actualDialogue.current,modern3840?Dlg3840CurrentSignature.size:modern3663?PatchCurrentSignature.size:NewCurrentSignature.size},
+         {actualDialogue.database,modern3840?Dlg3840GetterSignature.size:modern3663?PatchDatabaseSignature.size:NewDatabaseSignature.size}})
         runtimeGame->executable(r.first,r.second);
+    // The 3840 getter's native owner-thread check also executes.
+    if(modern3840)runtimeGame->executable(relative(behavior.image,actualDialogue.database,0x27,0x2B),0x62);
     stub(*runtimeGame,actualDialogue.finish,(void*)modernFinish);
     stub(*runtimeGame,actualDialogue.symbols[DialogueSymStopVoice],(void*)modernStop);
-    stub(*runtimeGame,modern3663?0x3DB010:0x3DD7E0,(void*)modernLookup);
-    stub(*runtimeGame,modern3663?0x4FF910:0x4DAE40,(void*)modernLookup);
-    stub(*runtimeGame,modern3663?0xD66740:0xD2C8D0,(void*)modernDispatch);
+    // Same external lookups and event dispatch, matched by native call site.
+    stub(*runtimeGame,modern3840?0x3EABD0:modern3663?0x3DB010:0x3DD7E0,(void*)modernLookup);
+    stub(*runtimeGame,modern3840?0x535E70:modern3663?0x4FF910:0x4DAE40,(void*)modernLookup);
+    stub(*runtimeGame,modern3840?0xDC03E0:modern3663?0xD66740:0xD2C8D0,(void*)modernDispatch);
     if(scenario=="modern_choice"){
         // Bypass ONLY choice rendering after the actual wait-flag write.
-        U32 from=modern3663?0x69CDB4:0x670437,to=modern3663?0x69DC36:0x6712B8;
+        U32 from=modern3840?0x6D1D5C:modern3663?0x69CDB4:0x670437,to=modern3840?0x6D2BF7:modern3663?0x69DC36:0x6712B8;
         CHECK(base[from-4]==0xC6&&base[from-3]==0x46&&base[from-2]==0x5D&&base[from-1]==1);
         runtimeGame->executable(from,14);jump(base+from,base+to);
     }
@@ -75,9 +84,9 @@ static void testModernDialogue(){
     if(scenario=="modern_choice")put32(f.entries.data()+0x48,1);
     if(scenario=="modern_events")for(U32 i=0;i<3;++i)f.entries[i*0x70+0x38]=1;
     if(scenario.rfind("modern_cache_",0)==0)put32(f.ui.view.data()+0x230,0);
-    if(scenario=="modern_cache_empty")set(f.cache.data(),modern3663?8:0,nullptr);
-    if(scenario=="modern_cache_count")put32(f.store.data()+(modern3663?0x28:8),1000001);
-    if(scenario=="modern_cache_unreadable")set(f.store.data(),modern3663?0x20:0x58,(void*)1);
+    if(scenario=="modern_cache_empty")set(f.cache.data(),modern3840?0x20:modern3663?8:0,nullptr);
+    if(scenario=="modern_cache_count")put32(f.store.data()+(modern3840?0x20:modern3663?0x28:8),1000001);
+    if(scenario=="modern_cache_unreadable")set(f.store.data(),modern3840?0x18:modern3663?0x20:0x58,(void*)1);
     CHECK(f.update()==&f.result&&f.result==0);f.show();
     if(scenario.rfind("modern_cache_",0)==0){
         CHECK(f.ui.guides[1].wrapper[0xBE]&&!f.ui.appears(1));f.press();f.update();
@@ -137,6 +146,7 @@ static void testModernSequence(){
     regions.push_back({facade.data(),facade.size()});regions.push_back({component.data(),component.size()});
     regions.push_back({target.data(),target.size()});regions.push_back({(U8*)eventVT.data(),sizeof(eventVT)});
     regions.push_back({(U8*)actorVT.data(),sizeof(actorVT)});regions.push_back({(U8*)componentVT.data(),sizeof(componentVT)});
+    CHECK(relative(behavior.image,helper,0x21,0x25)==actualDialogue.symbols[DialogueSymWorld]);
     set(base,actualSequence.symbols[SequencerSymStateFacade],facade.data());set(facade.data(),0,f.state.data());
     set(f.world.data(),0x30,f.store.data());modernManager=f.store.data();modernActor=f.actor.data();
     modernComponent=component.data();modernSequence=target.data();
