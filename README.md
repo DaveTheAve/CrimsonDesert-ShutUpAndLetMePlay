@@ -87,7 +87,7 @@ That means many game updates that simply move code around, change RVAs, or rearr
 
 If Pearl Abyss substantially rewrites the relevant native code, a signature becomes ambiguous, or another mod has already modified the same entry points, Shut Up & Let Me Play fails safely instead of hooking an unknown function and hoping for the best. At that point, the mod may need an update.
 
-The native routines have been checked in isolation against **`CrimsonDesert.exe` file version `1.0.0.3840`**, with regression coverage for **`1.0.0.3663`**, **`1.0.0.3479`**, **`1.0.0.2949`**, and **`1.0.0.2944`**. These are diagnostic reference versions, **not** hard-coded compatibility locks. The current offline build still requires in-game confirmation.
+The native routines have been checked in isolation against **`CrimsonDesert.exe` file version `1.0.0.3840`**, with regression coverage for **`1.0.0.3663`**, **`1.0.0.3479`**, **`1.0.0.2949`**, and **`1.0.0.2944`**. These are diagnostic reference versions, **not** hard-coded compatibility locks. A player confirmed the current build in game on Steam `1.0.0.3840`.
 
 Do not hot-load or hot-unload the ASI.
 

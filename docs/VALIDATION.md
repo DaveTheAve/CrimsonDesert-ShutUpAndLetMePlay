@@ -7,7 +7,9 @@ Target executable file version: **1.0.0.3840** (Steam PC patch of 2026-11-26).
 SHA-256: `ea2d84d947521332b002359818960ffd97765f37b447503d8a1efad4040269c8`.
 PE timestamp: `0x6B07E5E9`; image size: `0x13D05000`.
 
-The game executable is a local test input only and is not distributed. The complete Windows game was not launched. This candidate needs in-game confirmation. No GitHub commit, push, tag or release is part of this offline work.
+The game executable is a local test input only and is not distributed. The automated suites below did not launch the complete Windows game.
+
+**In-game check (user-reported, 2026-11-27, Steam PC, 1.0.0.3840):** build `2.0.4-build3840-r2` worked for gameplay cutscenes, sequence-driven dialogue and interaction NPC dialogue. This is the player's own report; no diagnostic capture from that session was reviewed. Epic-store runtime compatibility is not claimed.
 
 ## What 2.0.3 rejected
 
